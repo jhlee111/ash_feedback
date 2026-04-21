@@ -38,7 +38,8 @@ defmodule AshFeedback.MixProject do
 
   defp deps do
     [
-      {:phoenix_replay, path: "../phoenix_replay"},
+      # Consumer apps can override this with a pinned ref or path dep.
+      {:phoenix_replay, git: "https://github.com/jhlee111/phoenix_replay.git"},
       {:ash, "~> 3.5"},
       {:ash_postgres, "~> 2.6"},
       {:ash_paper_trail, "~> 0.5", optional: true},
