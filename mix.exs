@@ -42,8 +42,6 @@ defmodule AshFeedback.MixProject do
       {:ash, "~> 3.5"},
       {:ash_postgres, "~> 2.6"},
       {:ash_paper_trail, "~> 0.5", optional: true},
-      # ash_prefixed_id wired in Phase 4a (not yet on Hex; add as git dep
-      # when we need it).
       {:ex_doc, "~> 0.34", only: :dev, runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false}
     ]
