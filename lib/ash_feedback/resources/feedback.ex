@@ -52,6 +52,12 @@ defmodule AshFeedback.Resources.Feedback do
     domain = Keyword.fetch!(opts, :domain)
     repo = Keyword.fetch!(opts, :repo)
     assignee_resource = Keyword.get(opts, :assignee_resource)
+    # Host's User primary-key Ash type. Defaults to `:uuid` short-name
+    # so bare-Ash hosts still work. Hosts using AshPrefixedId MUST pass
+    # the concrete ObjectId type (e.g. `GsNet.Accounts.User.ObjectId`)
+    # otherwise the :assignee belongs_to filter cannot round-trip the
+    # prefixed string at load time.
+    assignee_attribute_type = Keyword.get(opts, :assignee_attribute_type, :uuid)
     pubsub_module = Keyword.get(opts, :pubsub)
     paper_trail_actor = Keyword.get(opts, :paper_trail_actor)
     _ = Keyword.get(opts, :prefix, "fbk")
@@ -84,12 +90,22 @@ defmodule AshFeedback.Resources.Feedback do
         change_tracking_mode :changes_only
         store_action_name? true
 
+        # FK attributes are ignored: AshPaperTrail serializes diffs as
+        # JSONB, and host-provided AshPrefixedId types (e.g.
+        # GsNet.Accounts.User.ObjectId) don't have a JSON-safe
+        # dump_to_embedded path. State transitions already capture the
+        # "who-did-what" via :status + the changes blob without the
+        # FK column, so we lose nothing meaningful by ignoring them.
         ignore_attributes [
           :inserted_at,
           :updated_at,
           :events_s3_key,
           :identity,
-          :metadata
+          :metadata,
+          :assignee_id,
+          :verified_by_id,
+          :resolved_by_id,
+          :related_to_id
         ]
 
         attributes_as_attributes [:status, :reported_on_env]
@@ -237,37 +253,40 @@ defmodule AshFeedback.Resources.Feedback do
           allow_nil? true
         end
 
-        attribute :assignee_id, Ash.Type.UUID, public?: true, allow_nil?: true
-        attribute :verified_by_id, Ash.Type.UUID, public?: true, allow_nil?: true
-        attribute :resolved_by_id, Ash.Type.UUID, public?: true, allow_nil?: true
-        attribute :related_to_id, Ash.Type.UUID, public?: true, allow_nil?: true
-
         create_timestamp :inserted_at
         update_timestamp :updated_at
       end
 
+      # FK source attributes (assignee_id, verified_by_id, resolved_by_id,
+      # related_to_id) are NOT declared explicitly. Each `belongs_to`
+      # auto-generates its source attribute with the target's primary-key
+      # type — e.g. on a host where `GsNet.Accounts.User.id` is an
+      # AshPrefixedId-typed column, `assignee_id` inherits that type and
+      # casts prefixed strings correctly. Declaring a raw `Ash.Type.UUID`
+      # attribute here would force an unconditional raw-UUID round-trip
+      # at the boundary and break the `:assignee` load.
       relationships do
         unquote(
           if assignee_resource do
             quote do
               belongs_to :assignee, unquote(assignee_resource) do
                 public? true
-                source_attribute :assignee_id
-                define_attribute? false
+                attribute_writable? true
+                attribute_type unquote(assignee_attribute_type)
                 allow_nil? true
               end
 
               belongs_to :verified_by, unquote(assignee_resource) do
                 public? true
-                source_attribute :verified_by_id
-                define_attribute? false
+                attribute_writable? true
+                attribute_type unquote(assignee_attribute_type)
                 allow_nil? true
               end
 
               belongs_to :resolved_by, unquote(assignee_resource) do
                 public? true
-                source_attribute :resolved_by_id
-                define_attribute? false
+                attribute_writable? true
+                attribute_type unquote(assignee_attribute_type)
                 allow_nil? true
               end
             end
@@ -276,8 +295,7 @@ defmodule AshFeedback.Resources.Feedback do
 
         belongs_to :related_to, __MODULE__ do
           public? true
-          source_attribute :related_to_id
-          define_attribute? false
+          attribute_writable? true
           allow_nil? true
         end
       end
@@ -354,35 +372,29 @@ defmodule AshFeedback.Resources.Feedback do
 
         update :assign do
           require_atomic? false
-          argument :assignee_id, Ash.Type.UUID, allow_nil?: false
-          change set_attribute(:assignee_id, arg(:assignee_id))
+          accept [:assignee_id]
           change transition_state(:in_progress)
         end
 
         update :verify do
           require_atomic? false
-          argument :pr_urls, {:array, :string}, allow_nil?: false
-          argument :verified_by_id, Ash.Type.UUID, allow_nil?: true
+          accept [:pr_urls, :verified_by_id]
           argument :note, :string, allow_nil?: true
 
           validate fn changeset, _ctx ->
-            case Ash.Changeset.get_argument(changeset, :pr_urls) do
+            case Ash.Changeset.get_attribute(changeset, :pr_urls) do
               [_ | _] -> :ok
               _ -> {:error, field: :pr_urls, message: "at least one PR URL required"}
             end
           end
 
-          change set_attribute(:pr_urls, arg(:pr_urls))
-          change set_attribute(:verified_by_id, arg(:verified_by_id))
           change set_attribute(:verified_at, &DateTime.utc_now/0)
           change transition_state(:verified_on_preview)
         end
 
         update :resolve do
           require_atomic? false
-          argument :resolved_by_id, Ash.Type.UUID, allow_nil?: true
-
-          change set_attribute(:resolved_by_id, arg(:resolved_by_id))
+          accept [:resolved_by_id]
           change set_attribute(:resolved_at, &DateTime.utc_now/0)
           change transition_state(:resolved)
         end
