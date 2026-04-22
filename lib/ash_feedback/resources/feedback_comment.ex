@@ -34,11 +34,27 @@ defmodule AshFeedback.Resources.FeedbackComment do
     repo = Keyword.fetch!(opts, :repo)
     feedback_resource = Keyword.fetch!(opts, :feedback_resource)
     author_resource = Keyword.fetch!(opts, :author_resource)
+    # Matches the feedback resource's `:assignee_attribute_type` knob —
+    # hosts using AshPrefixedId for their User resource MUST pass the
+    # concrete ObjectId type (e.g. `GsNet.Accounts.User.ObjectId`);
+    # the default `:uuid` short-name resolves to `AnyPrefixedId` on
+    # such hosts, which round-trips a prefixed string into a raw UUID
+    # and breaks the `:author` belongs_to load.
+    author_attribute_type = Keyword.get(opts, :author_attribute_type, :uuid)
+    pubsub_module = Keyword.get(opts, :pubsub)
+
+    notifiers =
+      if pubsub_module do
+        [Ash.Notifier.PubSub]
+      else
+        []
+      end
 
     quote location: :keep do
       use Ash.Resource,
         domain: unquote(domain),
-        data_layer: AshPostgres.DataLayer
+        data_layer: AshPostgres.DataLayer,
+        notifiers: unquote(notifiers)
 
       require Ash.Query
 
@@ -47,6 +63,20 @@ defmodule AshFeedback.Resources.FeedbackComment do
         repo unquote(repo)
         migrate? false
       end
+
+      unquote(
+        if pubsub_module do
+          quote do
+            pub_sub do
+              module Phoenix.PubSub
+              name unquote(pubsub_module)
+              prefix "feedback"
+
+              publish :create, ["comment_added"]
+            end
+          end
+        end
+      )
 
       code_interface do
         define :create_comment, action: :create
@@ -76,6 +106,7 @@ defmodule AshFeedback.Resources.FeedbackComment do
         belongs_to :author, unquote(author_resource) do
           public? true
           attribute_writable? true
+          attribute_type unquote(author_attribute_type)
           allow_nil? false
         end
       end

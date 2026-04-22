@@ -136,12 +136,20 @@ defmodule AshFeedback.Resources.Feedback do
               name unquote(pubsub_module)
               prefix "feedback"
 
+              # Each `publish` with a list joins segments into one
+              # `prefix:a:b` topic, so a single publish can't reach
+              # both a broad "status_changed" subscriber and a narrower
+              # "assigned" subscriber — we duplicate the call instead.
               publish_all :create, ["created"]
               publish :acknowledge, ["status_changed"]
-              publish :assign, ["status_changed", "assigned"]
-              publish :verify, ["status_changed", "verified"]
-              publish :resolve, ["status_changed", "resolved"]
-              publish :dismiss, ["status_changed", "dismissed"]
+              publish :assign, ["status_changed"]
+              publish :assign, ["assigned"]
+              publish :verify, ["status_changed"]
+              publish :verify, ["verified"]
+              publish :resolve, ["status_changed"]
+              publish :resolve, ["resolved"]
+              publish :dismiss, ["status_changed"]
+              publish :dismiss, ["dismissed"]
             end
           end
         end
