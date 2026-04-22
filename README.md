@@ -236,15 +236,23 @@ with bearer-token auth — see the gs_net Phase 5d plan
 (`docs/plans/active/2026-04-21-feedback-triage.md`) for a reference
 implementation.
 
+## Docs
+
+- [`docs/guides/demo-project.md`](docs/guides/demo-project.md) —
+  stand up a fresh Phoenix+Ash app and exercise the library
+  end-to-end
+- [`docs/plans/README.md`](docs/plans/README.md) — forward-looking
+  plan index (5e / 5f / 5g / 6)
+
 ## Status
 
 - [x] Phase 4a — Companion shipped (storage adapter, resource, types)
 - [x] Phase 5a — Triage state machine + enum types
 - [x] Phase 5b — FeedbackComment + PubSub + PaperTrail
 - [x] Phase 5d — Deploy-pipeline read actions + promote generic action
-- [ ] Phase 5e — Slack + GitHub Issues adapter stubs (optional)
-- [ ] Phase 5f — Igniter installer (`mix ash_feedback.install`)
-- [ ] Phase 5g — `AshFeedback.UI.AdminLive` — drop-in Cinder admin UI
+- [ ] [Phase 5e](docs/plans/5e-integration-adapters.md) — Slack + GitHub Issues adapter stubs
+- [ ] [Phase 5f](docs/plans/5f-igniter-installer.md) — Igniter installer (`mix ash_feedback.install`)
+- [ ] [Phase 5g](docs/plans/5g-admin-live.md) — `AshFeedback.UI.AdminLive` (Cinder drop-in)
 - [ ] Phase 6 — Hex publish (PoC hardening first)
 
 ## License
