@@ -38,8 +38,11 @@ defmodule AshFeedback.MixProject do
 
   defp deps do
     [
-      # Consumer apps can override this with a pinned ref or path dep.
-      {:phoenix_replay, path: "../phoenix_replay"},
+      # Library consumers get phoenix_replay transitively from github main.
+      # Override in the consumer's mix.exs with a pinned ref + `override: true`
+      # when you want to lock to a specific SHA (recommended for production).
+      # For active local library development, swap to `path: "../phoenix_replay"`.
+      {:phoenix_replay, github: "jhlee111/phoenix_replay", branch: "main"},
       {:ash, "~> 3.5"},
       {:ash_postgres, "~> 2.6"},
       {:ash_state_machine, "~> 0.2"},

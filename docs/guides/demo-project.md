@@ -74,9 +74,30 @@ Once you can sign in, stop the server and move on.
 Edit `mix.exs` — add these two entries to `deps/0`:
 
 ```elixir
-{:phoenix_replay, github: "jhlee111/phoenix_replay", branch: "main"},
+{:phoenix_replay,
+ github: "jhlee111/phoenix_replay", branch: "main", override: true},
 {:ash_feedback, github: "jhlee111/ash_feedback", branch: "main"}
 ```
+
+`override: true` on `phoenix_replay` is important: `ash_feedback`'s
+own `mix.exs` declares `phoenix_replay` as a transitive dep, and
+even if you both pin `main`, Mix treats a consumer-level git dep as
+diverged from a transitive git dep unless you explicitly override.
+Without `override: true` you'll see:
+
+```
+the dependency phoenix_replay in mix.exs is overriding a child dependency
+```
+
+For production, pin both to specific SHAs instead of `branch: "main"`:
+
+```elixir
+{:phoenix_replay,
+ github: "jhlee111/phoenix_replay", ref: "ea18972", override: true},
+{:ash_feedback, github: "jhlee111/ash_feedback", ref: "7999079"}
+```
+
+Then:
 
 ```bash
 mix deps.get
