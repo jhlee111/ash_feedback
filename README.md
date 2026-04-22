@@ -8,12 +8,6 @@ Ash resource + triage state machine for bug-report feedback, built on
 [`phoenix_replay`](https://github.com/jhlee111/phoenix_replay)'s ingest
 pipeline.
 
-> Not to be confused with
-> [`ash_storage`](https://github.com/ash-project/ash_storage) — that's
-> the official Ash extension for **file attachments** (images, PDFs).
-> This library is about the **Feedback row** itself (bug reports +
-> triage workflow), not file uploads.
-
 ## What you get
 
 - A concrete `Feedback` resource exposed as a `use` macro — bring your
