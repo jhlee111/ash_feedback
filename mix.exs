@@ -39,10 +39,14 @@ defmodule AshFeedback.MixProject do
   defp deps do
     [
       # Consumer apps can override this with a pinned ref or path dep.
-      {:phoenix_replay, git: "https://github.com/jhlee111/phoenix_replay.git"},
+      {:phoenix_replay, path: "../phoenix_replay"},
       {:ash, "~> 3.5"},
       {:ash_postgres, "~> 2.6"},
-      {:ash_paper_trail, "~> 0.5", optional: true},
+      {:ash_state_machine, "~> 0.2"},
+      {:ash_paper_trail, "~> 0.5"},
+      {:phoenix_pubsub, "~> 2.1"},
+      {:ecto_sql, "~> 3.10"},
+      {:postgrex, ">= 0.0.0"},
       {:ex_doc, "~> 0.34", only: :dev, runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false}
     ]
