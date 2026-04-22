@@ -74,33 +74,41 @@ Once you can sign in, stop the server and move on.
 Edit `mix.exs` — add these two entries to `deps/0`:
 
 ```elixir
-{:phoenix_replay,
- github: "jhlee111/phoenix_replay", branch: "main", override: true},
 {:ash_feedback, github: "jhlee111/ash_feedback", branch: "main"}
 ```
 
-`override: true` on `phoenix_replay` is important: `ash_feedback`'s
-own `mix.exs` declares `phoenix_replay` as a transitive dep, and
-even if you both pin `main`, Mix treats a consumer-level git dep as
-diverged from a transitive git dep unless you explicitly override.
-Without `override: true` you'll see:
+That's it. `phoenix_replay` comes transitively from `ash_feedback`'s
+deps (also at `branch: "main"`), so you don't need to list it
+yourself for the demo.
 
-```
-the dependency phoenix_replay in mix.exs is overriding a child dependency
+```bash
+mix deps.get
 ```
 
-For production, pin both to specific SHAs instead of `branch: "main"`:
+### Pinning specific SHAs (recommended for production)
+
+For reproducibility, pin each library to an explicit SHA. When you
+pin `phoenix_replay` directly, you MUST add `override: true` —
+otherwise Mix treats your `ref:` pin as diverging from the
+transitive `branch: "main"` in `ash_feedback`'s own `mix.exs` and
+refuses to resolve:
 
 ```elixir
 {:phoenix_replay,
  github: "jhlee111/phoenix_replay", ref: "ea18972", override: true},
-{:ash_feedback, github: "jhlee111/ash_feedback", ref: "7999079"}
+{:ash_feedback, github: "jhlee111/ash_feedback", ref: "fab3df8"}
 ```
 
-Then:
+### Using local path deps (library development)
 
-```bash
-mix deps.get
+If you're hacking on `ash_feedback` or `phoenix_replay` locally and
+want the demo app to use your sibling checkouts, switch both to
+`path:` entries AND keep `override: true` on `phoenix_replay` (the
+library's own mix.exs still ships a `github:` spec for it):
+
+```elixir
+{:phoenix_replay, path: "../phoenix_replay", override: true},
+{:ash_feedback, path: "../ash_feedback"}
 ```
 
 ## 3. Install phoenix_replay
