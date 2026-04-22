@@ -4,7 +4,7 @@ Step-by-step to stand up a fresh Phoenix + Ash app that exercises
 `ash_feedback` end-to-end — submit a feedback via the widget, see it
 persisted, and transition it through the triage state machine.
 
-**What you'll have when done**: an `ash_feedback_demo` Phoenix app with
+**What you'll have when done**: a `feedback_demo` Phoenix app with
 a floating bug-report widget (rrweb session recording), feedback
 rows stored as an Ash resource with PaperTrail versioning, and the
 full triage workflow accessible via IEx and a minimal admin
@@ -37,7 +37,7 @@ command — `igniter` patches mix.exs, config, router, endpoint, and
 runs the installers for each package:
 
 ```bash
-mix igniter.new ash_feedback_demo --with phx.new \
+mix igniter.new feedback_demo --with phx.new \
   --install ash,ash_phoenix \
   --install ash_postgres,ash_authentication \
   --install ash_authentication_phoenix,ash_admin \
@@ -45,7 +45,7 @@ mix igniter.new ash_feedback_demo --with phx.new \
   --auth-strategy magic_link \
   --setup --yes
 
-cd ash_feedback_demo
+cd feedback_demo
 ```
 
 What that gives you:
@@ -126,15 +126,15 @@ Edit `config/config.exs`:
 ```elixir
 config :phoenix_replay,
   environment: config_env(),
-  identify: {AshFeedbackDemo.Feedback.Identify, :fetch_identity, []},
-  metadata: {AshFeedbackDemo.Feedback.Identify, :fetch_metadata, []},
+  identify: {FeedbackDemo.Feedback.Identify, :fetch_identity, []},
+  metadata: {FeedbackDemo.Feedback.Identify, :fetch_metadata, []},
   # Temporary — ash_feedback flips this in step 4.
-  storage: {PhoenixReplay.Storage.Ecto, repo: AshFeedbackDemo.Repo},
+  storage: {PhoenixReplay.Storage.Ecto, repo: FeedbackDemo.Repo},
   session_token_secret: "dev-secret-at-least-32-bytes-long-xxxxxx",
   limits: [max_batch_bytes: 5_000_000]
 ```
 
-Add pipelines + routes in `lib/ash_feedback_demo_web/router.ex`:
+Add pipelines + routes in `lib/feedback_demo_web/router.ex`:
 
 ```elixir
 import PhoenixReplay.Router
@@ -163,7 +163,7 @@ scope "/admin" do
 end
 ```
 
-Widget asset plug in `lib/ash_feedback_demo_web/endpoint.ex`:
+Widget asset plug in `lib/feedback_demo_web/endpoint.ex`:
 
 ```elixir
 plug Plug.Static,
@@ -172,7 +172,7 @@ plug Plug.Static,
   gzip: false
 ```
 
-Widget mount in `lib/ash_feedback_demo_web/components/layouts/root.html.heex`
+Widget mount in `lib/feedback_demo_web/components/layouts/root.html.heex`
 (right before `</body>`):
 
 ```heex
@@ -182,10 +182,10 @@ Widget mount in `lib/ash_feedback_demo_web/components/layouts/root.html.heex`
 />
 ```
 
-Identity callback — create `lib/ash_feedback_demo/feedback/identify.ex`:
+Identity callback — create `lib/feedback_demo/feedback/identify.ex`:
 
 ```elixir
-defmodule AshFeedbackDemo.Feedback.Identify do
+defmodule FeedbackDemo.Feedback.Identify do
   def fetch_identity(conn) do
     case conn.assigns[:current_user] do
       %{id: id} = user ->
@@ -207,53 +207,53 @@ end
 
 ## 4. Install ash_feedback
 
-Create `lib/ash_feedback_demo/feedback.ex`:
+Create `lib/feedback_demo/feedback.ex`:
 
 ```elixir
-defmodule AshFeedbackDemo.Feedback do
-  use Ash.Domain, otp_app: :ash_feedback_demo
+defmodule FeedbackDemo.Feedback do
+  use Ash.Domain, otp_app: :feedback_demo
 
   resources do
-    resource AshFeedbackDemo.Feedback.Entry
-    resource AshFeedbackDemo.Feedback.Entry.Version
-    resource AshFeedbackDemo.Feedback.Comment
+    resource FeedbackDemo.Feedback.Entry
+    resource FeedbackDemo.Feedback.Entry.Version
+    resource FeedbackDemo.Feedback.Comment
   end
 end
 ```
 
-Create `lib/ash_feedback_demo/feedback/entry.ex`:
+Create `lib/feedback_demo/feedback/entry.ex`:
 
 ```elixir
-defmodule AshFeedbackDemo.Feedback.Entry do
+defmodule FeedbackDemo.Feedback.Entry do
   use AshFeedback.Resources.Feedback,
-    domain: AshFeedbackDemo.Feedback,
-    repo: AshFeedbackDemo.Repo,
-    assignee_resource: AshFeedbackDemo.Accounts.User,
-    pubsub: AshFeedbackDemo.PubSub,
-    paper_trail_actor: {AshFeedbackDemo.Accounts.User,
-                       [domain: AshFeedbackDemo.Accounts]}
+    domain: FeedbackDemo.Feedback,
+    repo: FeedbackDemo.Repo,
+    assignee_resource: FeedbackDemo.Accounts.User,
+    pubsub: FeedbackDemo.PubSub,
+    paper_trail_actor: {FeedbackDemo.Accounts.User,
+                       [domain: FeedbackDemo.Accounts]}
 end
 ```
 
-Create `lib/ash_feedback_demo/feedback/comment.ex` (optional — skip if
+Create `lib/feedback_demo/feedback/comment.ex` (optional — skip if
 you don't want comments):
 
 ```elixir
-defmodule AshFeedbackDemo.Feedback.Comment do
+defmodule FeedbackDemo.Feedback.Comment do
   use AshFeedback.Resources.FeedbackComment,
-    domain: AshFeedbackDemo.Feedback,
-    repo: AshFeedbackDemo.Repo,
-    feedback_resource: AshFeedbackDemo.Feedback.Entry,
-    author_resource: AshFeedbackDemo.Accounts.User,
-    pubsub: AshFeedbackDemo.PubSub
+    domain: FeedbackDemo.Feedback,
+    repo: FeedbackDemo.Repo,
+    feedback_resource: FeedbackDemo.Feedback.Entry,
+    author_resource: FeedbackDemo.Accounts.User,
+    pubsub: FeedbackDemo.PubSub
 end
 ```
 
 Register the domain in `config/config.exs`:
 
 ```elixir
-config :ash_feedback_demo,
-  ash_domains: [AshFeedbackDemo.Accounts, AshFeedbackDemo.Feedback]
+config :feedback_demo,
+  ash_domains: [FeedbackDemo.Accounts, FeedbackDemo.Feedback]
 ```
 
 Flip the `:phoenix_replay :storage` config to the Ash adapter:
@@ -262,8 +262,8 @@ Flip the `:phoenix_replay :storage` config to the Ash adapter:
 config :phoenix_replay,
   # ... other keys unchanged ...
   storage: {AshFeedback.Storage,
-            resource: AshFeedbackDemo.Feedback.Entry,
-            repo: AshFeedbackDemo.Repo}
+            resource: FeedbackDemo.Feedback.Entry,
+            repo: FeedbackDemo.Repo}
 ```
 
 Generate migrations for the PaperTrail `_versions` table:
@@ -292,12 +292,12 @@ iex -S mix phx.server
 Verify in IEx:
 
 ```elixir
-iex> AshFeedbackDemo.Accounts.User |> Ash.read!(authorize?: false)
-[%AshFeedbackDemo.Accounts.User{email: "qa@example.com", ...}]
+iex> FeedbackDemo.Accounts.User |> Ash.read!(authorize?: false)
+[%FeedbackDemo.Accounts.User{email: "qa@example.com", ...}]
 ```
 
 The magic-link console printer only runs in dev. In prod, configure
-a real mail sender via `config :ash_feedback_demo, :mailer`.
+a real mail sender via `config :feedback_demo, :mailer`.
 
 ## 6. Submit a feedback
 
@@ -309,8 +309,8 @@ a real mail sender via `config :ash_feedback_demo, :mailer`.
 Verify in IEx:
 
 ```elixir
-iex> AshFeedbackDemo.Feedback.Entry.list_feedback!()
-[%AshFeedbackDemo.Feedback.Entry{
+iex> FeedbackDemo.Feedback.Entry.list_feedback!()
+[%FeedbackDemo.Feedback.Entry{
    id: "fbk_...",
    description: "...",
    severity: :medium,
@@ -323,23 +323,23 @@ iex> AshFeedbackDemo.Feedback.Entry.list_feedback!()
 ## 7. Triage via IEx
 
 ```elixir
-iex> [fb | _] = AshFeedbackDemo.Feedback.Entry.list_feedback!()
+iex> [fb | _] = FeedbackDemo.Feedback.Entry.list_feedback!()
 
 # Acknowledge
-iex> AshFeedbackDemo.Feedback.Entry.acknowledge!(fb.id, actor: user)
+iex> FeedbackDemo.Feedback.Entry.acknowledge!(fb.id, actor: user)
 
 # Assign
-iex> AshFeedbackDemo.Feedback.Entry.assign!(fb.id, %{assignee_id: user.id}, actor: user)
+iex> FeedbackDemo.Feedback.Entry.assign!(fb.id, %{assignee_id: user.id}, actor: user)
 
 # Verify (requires PR URL)
-iex> AshFeedbackDemo.Feedback.Entry.verify!(
+iex> FeedbackDemo.Feedback.Entry.verify!(
 ...>   fb.id,
 ...>   %{pr_urls: ["https://github.com/you/repo/pull/1"]},
 ...>   actor: user
 ...> )
 
 # Resolve
-iex> AshFeedbackDemo.Feedback.Entry.resolve!(fb.id, %{}, actor: user)
+iex> FeedbackDemo.Feedback.Entry.resolve!(fb.id, %{}, actor: user)
 ```
 
 Each transition publishes to PubSub (`feedback:status_changed`,
@@ -358,18 +358,18 @@ For a more opinionated triage-style LV until
 ships, drop this ~80-line LV into your app as a starting point. It
 lists feedbacks in a plain table + shows the action buttons inline.
 
-`lib/ash_feedback_demo_web/live/admin/feedback_live.ex`:
+`lib/feedback_demo_web/live/admin/feedback_live.ex`:
 
 ```elixir
-defmodule AshFeedbackDemoWeb.Admin.FeedbackLive do
-  use AshFeedbackDemoWeb, :live_view
+defmodule FeedbackDemoWeb.Admin.FeedbackLive do
+  use FeedbackDemoWeb, :live_view
 
-  alias AshFeedbackDemo.Feedback.Entry
+  alias FeedbackDemo.Feedback.Entry
 
   def mount(_params, _session, socket) do
     if connected?(socket) do
-      Phoenix.PubSub.subscribe(AshFeedbackDemo.PubSub, "feedback:status_changed")
-      Phoenix.PubSub.subscribe(AshFeedbackDemo.PubSub, "feedback:created")
+      Phoenix.PubSub.subscribe(FeedbackDemo.PubSub, "feedback:status_changed")
+      Phoenix.PubSub.subscribe(FeedbackDemo.PubSub, "feedback:created")
     end
 
     {:ok, assign(socket, feedbacks: load())}
@@ -424,7 +424,7 @@ end
 Route it in the router (put it inside your admin auth scope):
 
 ```elixir
-live "/admin/feedback", AshFeedbackDemoWeb.Admin.FeedbackLive
+live "/admin/feedback", FeedbackDemoWeb.Admin.FeedbackLive
 ```
 
 This is intentionally crude — extend with severity filters, a detail
