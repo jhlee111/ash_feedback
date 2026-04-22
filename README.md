@@ -8,6 +8,18 @@ Ash resource + triage state machine for bug-report feedback, built on
 [`phoenix_replay`](https://github.com/jhlee111/phoenix_replay)'s ingest
 pipeline.
 
+## Demo
+
+End-to-end flow — user toggles the theme, reports an issue through the
+floating widget, and an admin replays the exact rrweb session from the
+triage page:
+
+<video src="docs/assets/demo.mp4" controls width="720" poster="docs/assets/demo-poster.png"></video>
+
+[▶ Watch the demo](docs/assets/demo.mp4) (MP4, ~800 KB — click if the
+inline video doesn't render). Walkthrough source:
+[`docs/guides/demo-project.md`](docs/guides/demo-project.md).
+
 ## What you get
 
 - A concrete `Feedback` resource exposed as a `use` macro — bring your

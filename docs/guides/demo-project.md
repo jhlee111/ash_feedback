@@ -351,12 +351,21 @@ with the actor.
 `--install ash_admin` (step 1) gave you `/admin` out of the box —
 visit `http://localhost:4000/admin` and you'll see every Ash resource
 in the app, including `Feedback.Entry`. Good enough for inspecting
-rows, less good for a triage workflow.
+rows, less good for a triage workflow, and it can't replay the
+session.
 
-For a more opinionated triage-style LV until
+For a more opinionated triage LV with **rrweb replay playback** until
 [`AshFeedback.UI.AdminLive`](../plans/5g-admin-live.md) (Phase 5g)
-ships, drop this ~80-line LV into your app as a starting point. It
-lists feedbacks in a plain table + shows the action buttons inline.
+ships, drop this ~110-line LV into your app. It lists feedbacks,
+opens a detail panel on row click, and embeds the `rrweb-player` via
+`phoenix_replay`'s standalone components.
+
+> **Expose `AshFeedback.Domain` to AshAdmin first.** The library's
+> `Ash.Domain` macro doesn't wire up `AshAdmin.Domain` — add
+> `extensions: [AshAdmin.Domain]` and an `admin do show? true end`
+> block to `FeedbackDemo.Feedback` (step 4) if you want
+> `Feedback.Entry` / `.Version` / `.Comment` to appear in the
+> `/admin` sidebar.
 
 `lib/feedback_demo_web/live/admin/feedback_live.ex`:
 
@@ -365,6 +374,9 @@ defmodule FeedbackDemoWeb.Admin.FeedbackLive do
   use FeedbackDemoWeb, :live_view
 
   alias FeedbackDemo.Feedback.Entry
+  alias PhoenixReplay.UI.Components
+
+  on_mount {FeedbackDemoWeb.LiveUserAuth, :live_user_required}
 
   def mount(_params, _session, socket) do
     if connected?(socket) do
@@ -372,65 +384,130 @@ defmodule FeedbackDemoWeb.Admin.FeedbackLive do
       Phoenix.PubSub.subscribe(FeedbackDemo.PubSub, "feedback:created")
     end
 
-    {:ok, assign(socket, feedbacks: load())}
+    {:ok, assign(socket, feedbacks: load(), selected: nil)}
   end
 
-  def handle_info({:feedback_status_changed, _}, socket),
-    do: {:noreply, assign(socket, feedbacks: load())}
+  def handle_params(%{"id" => id}, _uri, socket) do
+    selected = Enum.find(socket.assigns.feedbacks, &(to_string(&1.id) == id))
+    {:noreply, assign(socket, selected: selected)}
+  end
 
-  def handle_info({:feedback_created, _}, socket),
-    do: {:noreply, assign(socket, feedbacks: load())}
+  def handle_params(_params, _uri, socket),
+    do: {:noreply, assign(socket, selected: nil)}
+
+  def handle_info({topic, _payload}, socket)
+      when topic in [:feedback_created, :feedback_status_changed],
+      do: {:noreply, assign(socket, feedbacks: load())}
+
+  def handle_info(_, socket), do: {:noreply, socket}
 
   def handle_event("acknowledge", %{"id" => id}, socket) do
     Entry.acknowledge!(id, actor: socket.assigns.current_user)
     {:noreply, assign(socket, feedbacks: load())}
   end
 
-  defp load do
-    Entry.list_feedback!()
-  end
+  defp load, do: Entry.list_feedback!()
 
   def render(assigns) do
     ~H"""
-    <h1 class="text-2xl">Feedback triage</h1>
-    <table class="w-full">
-      <thead>
-        <tr><th>Status</th><th>Severity</th><th>Env</th><th>Description</th><th/></tr>
-      </thead>
-      <tbody>
-        <tr :for={f <- @feedbacks}>
-          <td>{f.status}</td>
-          <td>{f.severity}</td>
-          <td>{f.reported_on_env}</td>
-          <td>{f.description}</td>
-          <td>
-            <button
-              :if={f.status == :new}
-              phx-click="acknowledge"
-              phx-value-id={f.id}
-              class="px-2 py-1 bg-blue-500 text-white rounded"
-            >
-              Acknowledge
-            </button>
-          </td>
-        </tr>
-      </tbody>
-    </table>
+    <Components.phoenix_replay_admin_assets />
+
+    <div class="p-6 space-y-6">
+      <h1 class="text-2xl font-semibold">Feedback triage</h1>
+
+      <table class="w-full text-sm border">
+        <thead class="bg-base-200 text-left">
+          <tr>
+            <th class="p-2">Status</th>
+            <th class="p-2">Severity</th>
+            <th class="p-2">Env</th>
+            <th class="p-2">Description</th>
+            <th class="p-2">Reported</th>
+            <th class="p-2"></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr :for={f <- @feedbacks} class="border-t hover:bg-base-100">
+            <td class="p-2">{f.status}</td>
+            <td class="p-2">{f.severity}</td>
+            <td class="p-2">{f.reported_on_env}</td>
+            <td class="p-2 max-w-xl truncate">{f.description}</td>
+            <td class="p-2 text-xs opacity-70">
+              {Calendar.strftime(f.inserted_at, "%Y-%m-%d %H:%M")}
+            </td>
+            <td class="p-2 flex gap-2">
+              <.link
+                patch={~p"/admin/feedback/#{f.id}"}
+                class="px-2 py-1 bg-primary text-primary-content rounded"
+              >
+                View
+              </.link>
+              <button
+                :if={f.status == :new}
+                phx-click="acknowledge"
+                phx-value-id={f.id}
+                class="px-2 py-1 bg-secondary text-secondary-content rounded"
+              >
+                Ack
+              </button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div :if={@selected} class="border rounded p-4 space-y-3">
+        <div class="flex items-center justify-between">
+          <h2 class="text-lg font-semibold">
+            Session {@selected.session_id}
+          </h2>
+          <.link patch={~p"/admin/feedback"} class="text-sm underline">close</.link>
+        </div>
+
+        <dl class="grid grid-cols-2 gap-x-6 gap-y-1 text-sm">
+          <dt class="opacity-70">Status</dt><dd>{@selected.status}</dd>
+          <dt class="opacity-70">Severity</dt><dd>{@selected.severity}</dd>
+          <dt class="opacity-70">Env</dt><dd>{@selected.reported_on_env}</dd>
+        </dl>
+
+        <p class="whitespace-pre-wrap">{@selected.description}</p>
+
+        <Components.replay_player
+          id={"player-#{@selected.id}"}
+          events_url={~p"/admin/feedback/events/#{@selected.session_id}"}
+          height="600px"
+        />
+      </div>
+    </div>
     """
   end
 end
 ```
 
-Route it in the router (put it inside your admin auth scope):
+Route it inside the `ash_authentication_live_session` block so
+`current_user` is available:
 
 ```elixir
-live "/admin/feedback", FeedbackDemoWeb.Admin.FeedbackLive
+scope "/", FeedbackDemoWeb do
+  pipe_through :browser
+
+  ash_authentication_live_session :authenticated_routes do
+    live "/admin/feedback", Admin.FeedbackLive, :index
+    live "/admin/feedback/:id", Admin.FeedbackLive, :show
+  end
+end
 ```
 
-This is intentionally crude — extend with severity filters, a detail
-panel, verify/dismiss modals, the comment thread, etc. as your
-project needs. Phase 5g will ship a full drop-in that replaces all
-of the above.
+The detail panel fetches rrweb frames from the admin JSON endpoint
+(`GET /admin/feedback/events/:session_id`) which step 3 already
+mounted via `admin_routes "/feedback"`.
+`phoenix_replay_admin_assets/1` emits the rrweb-player CSS/JS once
+per page so the `replay_player/1` component auto-initializes on
+mount (and on subsequent LV patches).
+
+This is still intentionally minimal — extend with severity filters,
+a comment thread, assign/verify/dismiss modals, etc. as your
+project needs. Phase 5g will ship a full Cinder-based drop-in that
+replaces all of the above.
 
 ## Troubleshooting
 
