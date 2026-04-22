@@ -182,6 +182,8 @@ defmodule AshFeedback.Resources.Feedback do
         define :verify, action: :verify, get_by: [:id]
         define :resolve, action: :resolve, get_by: [:id]
         define :dismiss, action: :dismiss, get_by: [:id]
+        define :list_verified_non_preview, action: :list_verified_non_preview
+        define :list_preview_blockers, action: :list_preview_blockers
         define :promote_verified_to_resolved, action: :promote_verified_to_resolved
       end
 
@@ -371,6 +373,34 @@ defmodule AshFeedback.Resources.Feedback do
               sev -> Ash.Query.filter(query, severity == ^sev)
             end
           end
+        end
+
+        # Rows to auto-resolve on preview→prod promote. Originated on
+        # staging/dev/prod, verified on preview, waiting on ship.
+        #
+        # `^ref(:field)` is used instead of bare identifiers because
+        # this DSL lives inside the library's `__using__` quote block —
+        # Elixir hygiene mangles bare `status` / `reported_on_env` so
+        # Ash.Expr can't resolve them to attribute refs. Atom literals
+        # inside `ref/1` survive hygiene.
+        read :list_verified_non_preview do
+          filter expr(
+                   ^ref(:status) == :verified_on_preview and
+                     ^ref(:reported_on_env) != :preview
+                 )
+
+          prepare build(sort: [inserted_at: :asc])
+        end
+
+        # Open rows originated on preview — must be cleared before
+        # promoting preview to prod (preview-only regressions).
+        read :list_preview_blockers do
+          filter expr(
+                   ^ref(:status) in [:new, :acknowledged, :in_progress] and
+                     ^ref(:reported_on_env) == :preview
+                 )
+
+          prepare build(sort: [inserted_at: :asc])
         end
 
         update :acknowledge do
