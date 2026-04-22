@@ -242,7 +242,9 @@ implementation.
 - [x] Phase 5a — Triage state machine + enum types
 - [x] Phase 5b — FeedbackComment + PubSub + PaperTrail
 - [x] Phase 5d — Deploy-pipeline read actions + promote generic action
-- [ ] Phase 5e — Igniter installer (auto-wire config + domain + resource scaffolding)
+- [ ] Phase 5e — Slack + GitHub Issues adapter stubs (optional)
+- [ ] Phase 5f — Igniter installer (`mix ash_feedback.install`)
+- [ ] Phase 5g — `AshFeedback.UI.AdminLive` — drop-in Cinder admin UI
 - [ ] Phase 6 — Hex publish (PoC hardening first)
 
 ## License
