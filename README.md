@@ -14,7 +14,7 @@ End-to-end flow — user toggles the theme, reports an issue through the
 floating widget, and an admin replays the exact rrweb session from the
 triage page:
 
-<video src="https://github.com/jhlee111/ash_feedback/releases/download/demo-assets/demo.mp4" controls width="720" poster="docs/assets/demo-poster.png"></video>
+https://github.com/user-attachments/assets/b7f1ab30-60b2-4a2e-8ffb-d186bfa1e20d
 
 Walkthrough source:
 [`docs/guides/demo-project.md`](docs/guides/demo-project.md).
