@@ -3,16 +3,16 @@
 **Status**: proposed, **gated**
 **Est**: 8–12 hours (extract + abstract + tests + docs)
 
-## Gate: don't start until gs_net UI is stable
+## Gate: don't start until the reference host UI is stable
 
-The reference admin LV lives at `GsNetWeb.Admin.FeedbackLive` (~1034
-lines) and ships with gs_net. Extracting to the library **before**
-the UX settles means the library churns in lockstep with every
-gs_net tweak.
+A reference admin LV (~1034 lines) currently lives in the primary
+consuming host application. Extracting to the library **before** its
+UX settles means the library churns in lockstep with every host-side
+tweak.
 
-**Precondition**: 2–3 weeks of real QA usage on gs_net's admin UI
-with no substantive layout/interaction changes. Track stability in
-the originating gs_net plan before opening this phase.
+**Precondition**: 2–3 weeks of real QA usage on the host's admin UI
+with no substantive layout/interaction changes. Track stability on
+the host side before opening this phase.
 
 ## Motivation
 
@@ -87,8 +87,8 @@ if it's loaded. Components that don't use Cinder (modals, badges,
 - A host can `live "/admin/feedback", AshFeedback.UI.AdminLive`
   (plus their own auth pipeline) and triage feedback with zero LV
   code of their own.
-- gs_net's custom `FeedbackLive` can stay or be swapped for the
-  library version — both approaches work.
+- An existing host-side custom `FeedbackLive` can stay or be swapped
+  for the library version — both approaches work.
 - Documented in [`../../README.md`](../../README.md) and in
   [`../guides/demo-project.md`](../guides/demo-project.md) (the
   guide currently ships a copy-paste inline LV as a placeholder
@@ -96,6 +96,6 @@ if it's loaded. Components that don't use Cinder (modals, badges,
 
 ## Post-5g follow-up
 
-Pencil in 2–4h for gs_net migration if the decision is to adopt the
-library LV instead of keeping the custom one. That's tracked
-separately in gs_net, not here.
+Pencil in 2–4h for host-side migration if the decision is to adopt
+the library LV instead of keeping the custom one. Tracked in the
+host's planning, not here.

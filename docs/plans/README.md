@@ -3,13 +3,9 @@
 Forward-looking work plans. Completed phases are summarized in
 [`../../README.md`](../../README.md) under **Status** and live in git
 history; this directory holds plans that are **proposed** or
-**in-progress**.
-
-Originating cross-cutting plan (covers gs_net integration + both
-libraries): [gs_net/docs/plans/active/2026-04-21-feedback-triage.md](
-https://github.com/jhlee111/gs-net/blob/main/docs/plans/active/2026-04-21-feedback-triage.md).
-Library-scoped slices split out here so the library repo can be read
-standalone.
+**in-progress**. New plans belong under `active/`, `backlog/`,
+`proposals/`, or `completed/`; legacy phase files remain flat until
+re-filed.
 
 ## Index
 
@@ -21,8 +17,9 @@ standalone.
 | 6  | Hex publish | deferred | — |
 
 **Gated** = do not start until an upstream precondition clears. For
-5g that's "gs_net admin UI stable for 2–3 weeks of real QA usage";
-extracting before the UX settles churns the library in lockstep.
+5g that's "primary host's admin UI stable for 2–3 weeks of real QA
+usage"; extracting before the UX settles churns the library in
+lockstep.
 
 ## Completed phases (historical)
 
@@ -34,4 +31,4 @@ extracting before the UX settles churns the library in lockstep.
 | 5b | FeedbackComment + PubSub + PaperTrail | `bc9fcff` |
 | 5d | Deploy-pipeline read actions (`list_verified_non_preview`, `list_preview_blockers`) | `65a4c2d` |
 
-Details live in each commit's message + the originating gs_net plan.
+Details live in each commit's message.
