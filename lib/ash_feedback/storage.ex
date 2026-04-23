@@ -40,6 +40,16 @@ defmodule AshFeedback.Storage do
   end
 
   @impl true
+  def resume_session(session_id, now) do
+    Events.resume(
+      repo!(),
+      session_id,
+      PhoenixReplay.Config.session_idle_timeout_ms(),
+      now
+    )
+  end
+
+  @impl true
   def append_events(session_id, seq, batch) do
     Events.append(repo!(), session_id, seq, batch)
   end
