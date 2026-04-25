@@ -16,6 +16,12 @@ re-filed.
 | 5g | `AshFeedback.UI.AdminLive` (Cinder drop-in) | proposed, gated | [5g-admin-live.md](5g-admin-live.md) |
 | 6  | Hex publish | deferred | — |
 
+## Proposals (drafted, not yet committed)
+
+| Proposal | Depends on | File |
+|----------|------------|------|
+| Audio narration via AshStorage (ADR-0001) | ADR-0001 acceptance + phoenix_replay ADR-0005 implementation | [proposals/audio-narration.md](proposals/audio-narration.md) |
+
 **Gated** = do not start until an upstream precondition clears. For
 5g that's "primary host's admin UI stable for 2–3 weeks of real QA
 usage"; extracting before the UX settles churns the library in
