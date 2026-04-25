@@ -6,6 +6,7 @@ config :ash_feedback,
     AshFeedback.Test.Feedback,
     AshFeedback.Test.StorageDomain
   ]
+
 config :ash_feedback, ecto_repos: [AshFeedback.Test.Repo]
 
 config :ash_feedback, AshFeedback.Test.Repo,

@@ -52,12 +52,16 @@ defmodule AshFeedback.AudioRoundTripTest do
     # 1. Prepare a direct upload through the controller. The browser-side
     #    recorder JS posts here with `metadata: { audio_start_offset_ms }`.
     prepare_conn =
-      conn(:post, "/audio_uploads/prepare", Jason.encode!(%{
-        "filename" => "voice.webm",
-        "content_type" => "audio/webm; codecs=opus",
-        "byte_size" => 12_345,
-        "metadata" => %{"audio_start_offset_ms" => 4321}
-      }))
+      conn(
+        :post,
+        "/audio_uploads/prepare",
+        Jason.encode!(%{
+          "filename" => "voice.webm",
+          "content_type" => "audio/webm; codecs=opus",
+          "byte_size" => 12_345,
+          "metadata" => %{"audio_start_offset_ms" => 4321}
+        })
+      )
       |> put_req_header("content-type", "application/json")
       |> Plug.Parsers.call(
         Plug.Parsers.init(parsers: [:json], json_decoder: Jason, pass: ["*/*"])

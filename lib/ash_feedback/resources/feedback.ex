@@ -583,7 +583,6 @@ defmodule AshFeedback.Resources.Feedback do
           end
         end
       end
-
     end
   end
 end
