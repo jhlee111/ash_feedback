@@ -1,0 +1,305 @@
+# Audio Narration Guide
+
+Voice commentary on feedback submissions, end-to-end. The reporter taps 🎙 in the widget panel, records a short clip, and submits; the audio file rides through [AshStorage](https://github.com/ash-project/ash_storage) (presigned upload to S3, MinIO, Disk, or any compatible backend) and links to the feedback row. The admin replay view plays the clip in lock-step with the rrweb cursor.
+
+**Status**: Phases 1 + 2 + 3 shipped (2026-04-25). Cross-browser smoke verified in Chrome; Safari smoke pending.
+
+**Driving ADRs**:
+- [`0001-audio-narration-via-ash-storage.md`](../decisions/0001-audio-narration-via-ash-storage.md) — storage choice + sync-rule design (with the 2026-04-25 Question D addendum)
+- [phoenix_replay's `0005-replay-player-timeline-event-bus.md`](https://github.com/jhlee111/phoenix_replay/blob/main/docs/decisions/0005-replay-player-timeline-event-bus.md) — the JS API the admin playback subscribes to
+
+---
+
+## When does audio actually help?
+
+Two distinct feedback report paths exist, only one of which makes audio meaningful:
+
+| Path | Recording mode | Trigger label | Audio? |
+|---|---|---|---|
+| **Quick report** | `:continuous` | "Report issue" | **No** — replay timeline predates the voice note by minutes |
+| **Record and report** | `:on_demand` | "Record and report" | **Yes** — both start at the same moment, audio syncs to timeline |
+
+The audio recorder addon enforces this — it declares `modes: ["on_demand"]` at registration time, so the 🎙 button only appears on `:on_demand` widgets. On `:continuous` widgets the addon is silently skipped. Hosts who try to attach audio to a Quick-report flow get the description-only experience automatically.
+
+Control style (`:float` vs `:headless`) is independent — both can host either recording mode.
+
+See [phoenix_replay's mode-aware panel-addons spec](https://github.com/jhlee111/phoenix_replay/blob/main/docs/superpowers/specs/2026-04-25-mode-aware-panel-addons.md) for the full IA framework.
+
+---
+
+## Setup
+
+### 1. Add `ash_storage` to deps
+
+```elixir
+# mix.exs
+def deps do
+  [
+    {:ash_storage, github: "ash-project/ash_storage"}
+    # ... existing ash_feedback + phoenix_replay deps
+  ]
+end
+```
+
+(Pre-Hex; switch to `~> 0.1` once it cuts a release.)
+
+### 2. Define your `Blob` and `Attachment` AshStorage resources
+
+AshStorage is host-owned — you define the resources, not the library. Reference shapes:
+
+- [`dev/resources/blob.ex`](https://github.com/ash-project/ash_storage/blob/main/dev/resources/blob.ex) in the AshStorage repo
+- [`dev/resources/attachment.ex`](https://github.com/ash-project/ash_storage/blob/main/dev/resources/attachment.ex)
+
+Both belong in your application's storage domain. Phase 5f's installer will scaffold these eventually; for now copy the dev examples and adapt.
+
+### 3. Configure the storage service
+
+For dev — file-backed Disk service, no external infra:
+
+```elixir
+# config/dev.exs
+config :my_app, MyApp.Feedback.Entry,
+  storage: [
+    services: [
+      default: {AshStorage.Service.Disk, root: "tmp/uploads", base_url: "http://localhost:4000"}
+    ]
+  ]
+```
+
+For prod — S3 (or any S3-compatible backend like MinIO):
+
+```elixir
+# config/prod.exs
+config :my_app, MyApp.Feedback.Entry,
+  storage: [
+    services: [
+      default: {AshStorage.Service.S3, bucket: "my-feedback-audio", region: "us-east-1"}
+    ]
+  ]
+```
+
+### 4. Enable audio in `ash_feedback`
+
+```elixir
+# config/config.exs
+config :ash_feedback,
+  audio_enabled: true,
+  feedback_resource: MyApp.Feedback.Entry,
+  audio_attachment_resource: MyApp.Storage.Attachment,
+  audio_max_seconds: 300,                # default
+  audio_download_url_ttl_seconds: 1800   # default — 30 min, see Admin playback section
+```
+
+### 5. Pass the storage resources to the macro
+
+```elixir
+defmodule MyApp.Feedback.Entry do
+  use AshFeedback.Resources.Feedback,
+    otp_app: :my_app,
+    domain: MyApp.Feedback,
+    repo: MyApp.Repo,
+    audio_blob_resource: MyApp.Storage.Blob,
+    audio_attachment_resource: MyApp.Storage.Attachment
+end
+```
+
+`otp_app:` is required when audio is enabled so AshStorage's per-resource service config resolves at runtime. Audio-disabled hosts can leave it off.
+
+### 6. Codegen + migrate
+
+```bash
+mix ash.codegen audio_storage
+mix ash.migrate
+```
+
+This generates the migrations for the two storage tables (Blob + Attachment).
+
+---
+
+## Recording side (widget)
+
+### Browser asset wiring
+
+In your root layout — load the recorder CSS in `<head>` and the recorder JS at the **end** of `<body>`, after the `phoenix_replay` widget element so the addon registers before the panel mounts:
+
+```heex
+<link rel="stylesheet" href={~p"/assets/ash_feedback/audio_recorder.css"} />
+...
+<PhoenixReplay.UI.Components.phoenix_replay_widget
+  base_path="/api/feedback"
+  csrf_token={get_csrf_token()}
+  recording={:on_demand}
+/>
+<script defer src={~p"/assets/ash_feedback/audio_recorder.js"}></script>
+```
+
+Add a `Plug.Static` entry serving `ash_feedback/priv/static/assets`:
+
+```elixir
+# lib/my_app_web/endpoint.ex
+plug Plug.Static,
+  at: "/assets/ash_feedback",
+  from: {:ash_feedback, "priv/static/assets"}
+```
+
+### Router — mount the prepare + download endpoints
+
+```elixir
+# lib/my_app_web/router.ex
+import AshFeedback.Router, only: [audio_routes: 1]
+
+scope "/" do
+  pipe_through :browser
+  audio_routes()                       # default mount: /audio_uploads/...
+  # OR custom prefix:
+  # audio_routes(path: "/api/audio")   # → /api/audio/prepare + /api/audio/audio_downloads/:id
+end
+```
+
+The macro mounts:
+- `POST <path>/prepare` — minted by the recorder before each upload
+- `GET <path>/audio_downloads/:blob_id` — admin playback endpoint (302 to a signed URL)
+
+Both routes need to live behind whatever auth guards the feedback admin (the host pipeline).
+
+### Browser support
+
+- Chrome / Firefox / Edge — `audio/webm; codecs=opus` (primary)
+- Safari — `audio/mp4; codecs=mp4a.40.2` (fallback)
+- No supported codec → mic button disabled with a tooltip; the rest of the form remains usable
+- Microphone permission denied → inline notice; the user can still submit without audio
+- Length cap enforced client-side via `audio_max_seconds`
+
+---
+
+## Admin playback (Phase 3)
+
+A function component drops the synced `<audio>` element next to your existing rrweb player. Host owns the data load; the component is intentionally dumb.
+
+### 1. Render the component
+
+In your admin feedback detail LiveView template:
+
+```heex
+<PhoenixReplay.UI.Components.replay_player
+  id={"player-#{@selected.id}"}
+  session_id={@selected.session_id}
+  events_url={~p"/admin/feedback/events/#{@selected.session_id}"}
+  height={600}
+/>
+
+<AshFeedbackWeb.Components.AudioPlayback.audio_playback
+  audio_url={@audio_url}
+  audio_start_offset_ms={@audio_start_offset_ms}
+  session_id={@selected.session_id}
+/>
+```
+
+`audio_url` may be `nil` — the component renders nothing in that case, so wrapping `<:if>` is unnecessary.
+
+> **Note**: pass `session_id` to `<.replay_player>` explicitly. Without it, the player's hook falls back to `el.id` as the timeline-bus scope and the audio component will subscribe under a different sessionId, getting zero ticks.
+
+### 2. Load `:audio_clip` and derive the URL + offset
+
+```elixir
+# lib/my_app_web/admin/feedback_live.ex
+defp load_selected(socket, id) do
+  feedback =
+    MyApp.Feedback.Entry
+    |> Ash.get!(id, load: [audio_clip: [:blob]])
+
+  {audio_url, audio_offset_ms} = audio_assigns(feedback)
+
+  socket
+  |> assign(:selected, feedback)
+  |> assign(:audio_url, audio_url)
+  |> assign(:audio_start_offset_ms, audio_offset_ms)
+end
+
+defp audio_assigns(%{audio_clip: %{blob: %{id: blob_id, metadata: metadata}}}) do
+  offset = (metadata || %{}) |> Map.get("audio_start_offset_ms", 0)
+  # Adjust the path prefix to match your `audio_routes/1` mount.
+  {"/audio_uploads/audio_downloads/#{blob_id}", offset}
+end
+
+defp audio_assigns(_), do: {nil, 0}
+```
+
+The `audio_start_offset_ms` lives on the **Blob's** `metadata` map (per the revised D2 in ADR-0001), not on the attachment. The recorder writes it during the prepare call.
+
+### 3. Wire the JS hook into LiveSocket
+
+```javascript
+// assets/js/app.js
+import "../../deps/ash_feedback/priv/static/assets/audio_playback.js";
+
+const hooks = {
+  ...(window.AshFeedback?.Hooks || {}),
+  // your existing hooks...
+};
+
+const liveSocket = new LiveSocket("/live", Socket, { hooks /* ... */ });
+```
+
+The hook auto-registers on `window.AshFeedback.Hooks` when the script loads, so the spread picks it up.
+
+### Sync rules (Phase 3 D3)
+
+The hook subscribes to `PhoenixReplayAdmin.subscribeTimeline(sessionId, callback, {tick_hz: 10})` and reconciles the `<audio>` element on each event:
+
+| Event from `subscribeTimeline` | Action |
+|---|---|
+| `play` | `audio.play()` if `timecode_ms ≥ offset`, else noop (offset crossing during `tick` will start it) |
+| `pause` | `audio.pause()` |
+| `seek` | `audio.currentTime = max(0, (timecode_ms - offset) / 1000)`; pause below offset, resume above if last state was `:play` |
+| `tick` | Drift correction (>200ms); auto-cross offset boundary |
+| `ended` | `audio.pause()` |
+| **all events** | Track `detail.speed`; write to `audio.playbackRate` whenever it changes (no dedicated `:speed_changed` kind) |
+
+`audio.play()` may be rejected by the browser's autoplay policy — the hook silently catches the rejection. The user can click the `<audio controls>` element to start manually.
+
+### TTL
+
+The `GET /audio_downloads/:blob_id` endpoint mints a signed URL via AshStorage and 302-redirects. Default TTL is 30 minutes (`audio_download_url_ttl_seconds`). Long enough that scrub/pause cycles on a single mount don't outrun the URL; short enough to bound token exposure. LiveView reconnect re-mounts and gets a fresh URL.
+
+---
+
+## Server-side test fixtures
+
+The library's own tests use the in-memory `AshStorage.Service.Test` for round-trip coverage. Hosts running their own audio integration tests can do the same:
+
+```elixir
+setup do
+  AshStorage.Service.Test.start()
+  AshStorage.Service.Test.reset!()
+  :ok
+end
+```
+
+For TTL behavior the Test service ignores `:expires_in` — switch to `Service.Disk` with a `secret` set to actually exercise the signed-URL pathway.
+
+---
+
+## Decisions log
+
+| ADR / Spec | Decision | Status |
+|---|---|---|
+| ADR-0001 Q-A | AshStorage as the file store | unchanged |
+| ADR-0001 Q-B | Optional dep, opt-in compile flag | unchanged |
+| ADR-0001 Q-C | Inline pill recorder UX | shipped Phase 2 |
+| ADR-0001 Q-D | Sync rules — addendum 2026-04-25 | revised post-Phase-3 |
+| ADR-0001 Q-E | Cascade retention via AshStorage | unchanged |
+| Phase 2 D2 (revised) | Offset on Blob metadata | consumed by Phase 3 admin playback |
+| Phase 3 D1 | `<.audio_playback>` is a dumb function component | shipped |
+| Phase 3 D2 | `GET /audio_downloads/:blob_id` 302 redirect | shipped |
+| Phase 3 D4 | `tick_hz: 10` (was 60) | shipped |
+| phoenix_replay 2026-04-25 D2 | Mode-aware panel-addon API | shipped |
+
+---
+
+## See also
+
+- [`docs/guides/demo-project.md`](demo-project.md) — stand up a fresh Phoenix+Ash app and exercise the library end-to-end (audio steps included)
+- [`docs/decisions/0001-audio-narration-via-ash-storage.md`](../decisions/0001-audio-narration-via-ash-storage.md) — the source ADR
+- [`docs/superpowers/specs/2026-04-25-audio-narration-phase-3-design.md`](../superpowers/specs/2026-04-25-audio-narration-phase-3-design.md) — Phase 3 design notes
+- [phoenix_replay's mode-aware panel-addons spec](https://github.com/jhlee111/phoenix_replay/blob/main/docs/superpowers/specs/2026-04-25-mode-aware-panel-addons.md) — the IA framework that gates audio to Path B

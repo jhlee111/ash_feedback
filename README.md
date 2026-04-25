@@ -239,116 +239,26 @@ to the versions table.
 
 ## Audio narration (optional)
 
-ADR-0001 — voice narration on feedback submissions. The reporter taps
-🎙 in the widget panel, records a short clip, and submits; the audio
-file rides through [AshStorage](https://github.com/ash-project/ash_storage)
-(presigned upload to S3 or any compatible backend) and links to the
-feedback row. The admin replay view (Phase 3, in progress) plays the
-clip in sync with the rrweb cursor.
+ADR-0001 — voice commentary on feedback submissions. The reporter taps 🎙 in the
+widget panel, records a short clip, and submits; the audio file rides through
+[AshStorage](https://github.com/ash-project/ash_storage) (presigned upload to S3,
+MinIO, Disk, or any compatible backend) and links to the feedback row. The admin
+replay view plays the clip in lock-step with the rrweb cursor.
 
-**Status**: Phases 1 + 2 shipped — host opt-in, recorder UI, prepare
-endpoint, submit-side wiring. Phase 3 (admin playback synced to
-phoenix_replay's timeline event bus, ADR-0005) is the next deliverable.
+**Status**: Phases 1 + 2 + 3 shipped (2026-04-25). Recorder + presigned upload +
+admin playback synced to phoenix_replay's timeline event bus (ADR-0005).
 
-> **Mode availability**: the audio recorder is registered with
-> `modes: ["on_demand"]`. It mounts only on widgets whose `recording` is
-> `:on_demand` ("Record-and-report mode"). On `:continuous` widgets the addon
-> is silently skipped — voice commentary on cached/retrospective replays cannot
-> be synced to the rrweb timeline. Control style (`:float` / `:headless`) is
-> independent of this filter. See phoenix_replay's mode-aware panel-addons
-> spec (`docs/superpowers/specs/2026-04-25-mode-aware-panel-addons.md`) for
-> the full IA framework.
+**Mode-scoped**: the recorder addon declares `modes: ["on_demand"]` and only
+mounts on `recording: :on_demand` widgets ("Record-and-report mode"). On
+`:continuous` widgets it's silently skipped — voice commentary on
+cached/retrospective replays cannot be synced.
 
-### Enabling
+Audio behavior is opt-in at every layer — hosts who skip the config flag get
+the existing description-only feedback flow with zero change.
 
-```elixir
-# config/config.exs
-config :ash_feedback,
-  audio_enabled: true,
-  feedback_resource: MyApp.Feedback.Entry,
-  audio_attachment_resource: MyApp.Storage.Attachment,
-  audio_max_seconds: 300  # default
-```
-
-### Host requirements
-
-- `{:ash_storage, github: "ash-project/ash_storage"}` in your deps
-  (pre-Hex; switch to `~> 0.1` once it cuts a Hex release).
-- Host-defined `Blob` + `Attachment` AshStorage resources. See
-  [`dev/resources/blob.ex`](https://github.com/ash-project/ash_storage/blob/main/dev/resources/blob.ex)
-  and
-  [`dev/resources/attachment.ex`](https://github.com/ash-project/ash_storage/blob/main/dev/resources/attachment.ex)
-  in the AshStorage repo for reference shapes (Phase 5f's installer
-  will scaffold these).
-- An AshStorage service configured for the Blob resource — `Disk`
-  for dev, `S3` (or compatible) for prod.
-
-### Pass the audio resources to the macro
-
-```elixir
-defmodule MyApp.Feedback.Entry do
-  use AshFeedback.Resources.Feedback,
-    otp_app: :my_app,
-    domain: MyApp.Feedback,
-    repo: MyApp.Repo,
-    audio_blob_resource: MyApp.Storage.Blob,
-    audio_attachment_resource: MyApp.Storage.Attachment
-end
-```
-
-`otp_app:` is required when audio is enabled so AshStorage's per-resource
-service config (`config :my_app, MyApp.Feedback.Entry, storage: [...]`)
-resolves at runtime. Audio-disabled hosts can leave it off.
-
-Run `mix ash.codegen audio_storage` to generate the migrations for the
-two storage tables.
-
-### Wiring the browser side
-
-In your root layout — load the recorder CSS in `<head>` and the
-recorder JS at the **end** of `<body>`, after the `phoenix_replay`
-widget element so the addon registers before `phoenix_replay`'s panel
-mounts:
-
-```heex
-<link rel="stylesheet" href={~p"/assets/ash_feedback/audio_recorder.css"} />
-...
-<PhoenixReplay.UI.Components.phoenix_replay_widget ... />
-<script defer src={~p"/assets/ash_feedback/audio_recorder.js"}></script>
-```
-
-Add a `Plug.Static` entry serving `ash_feedback/priv/static/assets`:
-
-```elixir
-plug Plug.Static,
-  at: "/assets/ash_feedback",
-  from: {:ash_feedback, "priv/static/assets"}
-```
-
-In your router, mount the prepare endpoint inside an authenticated
-browser scope:
-
-```elixir
-import AshFeedback.Router, only: [audio_routes: 0]
-
-scope "/" do
-  pipe_through :browser
-  audio_routes()  # or audio_routes(path: "/api/audio")
-end
-```
-
-### Browser support
-
-- Chrome / Firefox / Edge — `audio/webm; codecs=opus` (primary).
-- Safari — `audio/mp4; codecs=mp4a.40.2` (fallback).
-- No supported codec → mic button disabled with a tooltip; the rest
-  of the form remains usable.
-- Microphone permission denied → inline notice; the user can still
-  submit without audio.
-
-Audio behavior is opt-in at every layer — hosts who skip the config
-flag get the existing description-only feedback flow with zero
-change.
+→ [**Audio narration guide**](docs/guides/audio-narration.md) — full setup
+(deps, config, browser wiring, admin playback component, sync rules, browser
+support, decisions log).
 
 ## Deploy pipeline integration
 
@@ -365,6 +275,8 @@ implementation.
 - [`docs/guides/demo-project.md`](docs/guides/demo-project.md) —
   stand up a fresh Phoenix+Ash app and exercise the library
   end-to-end
+- [`docs/guides/audio-narration.md`](docs/guides/audio-narration.md) —
+  voice commentary setup + admin playback
 - [`docs/plans/README.md`](docs/plans/README.md) — forward-looking
   plan index (5e / 5f / 5g / 6)
 
@@ -374,6 +286,7 @@ implementation.
 - [x] Phase 5a — Triage state machine + enum types
 - [x] Phase 5b — FeedbackComment + PubSub + PaperTrail
 - [x] Phase 5d — Deploy-pipeline read actions + promote generic action
+- [x] Audio narration (ADR-0001) — Phases 1+2+3 shipped (recorder + presigned upload + admin playback synced to rrweb timeline)
 - [ ] [Phase 5e](docs/plans/5e-integration-adapters.md) — Slack + GitHub Issues adapter stubs
 - [ ] [Phase 5f](docs/plans/5f-igniter-installer.md) — Igniter installer (`mix ash_feedback.install`)
 - [ ] [Phase 5g](docs/plans/5g-admin-live.md) — `AshFeedback.UI.AdminLive` (Cinder drop-in)
