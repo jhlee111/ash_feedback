@@ -1,0 +1,38 @@
+.phx-replay-audio-addon {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0;
+  flex-wrap: wrap;
+}
+
+.phx-replay-audio-mic,
+.phx-replay-audio-stop,
+.phx-replay-audio-rerecord {
+  font: inherit;
+  padding: 0.4rem 0.7rem;
+  border: 1px solid #888;
+  border-radius: 4px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.phx-replay-audio-mic[disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.phx-replay-audio-warn {
+  color: #c33;
+  font-size: 0.85em;
+}
+
+.phx-replay-audio-notice {
+  font-size: 0.85em;
+  color: #666;
+}
+
+.phx-replay-audio-preview {
+  width: 200px;
+  height: 32px;
+}
