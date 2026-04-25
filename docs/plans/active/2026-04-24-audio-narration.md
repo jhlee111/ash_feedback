@@ -1,6 +1,6 @@
 # Plan: Audio Narration via AshStorage
 
-**Status**: Active — Phase 1 in progress
+**Status**: Active — Phase 1 shipped (commit `67fd09a`); Phase 2 (recorder JS + presigned upload) next
 **Drafted**: 2026-04-24
 **Promoted**: 2026-04-24 (ADR-0001 Accepted)
 **ADR**: [0001-audio-narration-via-ash-storage](../../decisions/0001-audio-narration-via-ash-storage.md)
@@ -16,7 +16,7 @@ implementation plan.
 
 ## Phases
 
-### Phase 1 — AshStorage wiring + Feedback resource hook
+### Phase 1 — AshStorage wiring + Feedback resource hook ✅ shipped 2026-04-24 (`67fd09a`)
 
 **Goal**: ash_feedback declares an optional `:audio_clip`
 attachment on its Feedback resource via AshStorage, gated by a
