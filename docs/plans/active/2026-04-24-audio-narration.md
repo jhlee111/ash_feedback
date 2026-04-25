@@ -210,8 +210,13 @@ Safari smoke deferred to a separate verification pass.
 
 **DoD**
 
-- [ ] README + guide.
-- [ ] CHANGELOG roll-up entry covering all four phases.
+- [x] README + guide. README audio section reduced to a 17-line stub
+      pointing at `docs/guides/audio-narration.md` (305 lines covering
+      Path A/B framework, full setup, recording side, admin playback,
+      sync rules, decisions log). Shipped in `40b08d8` (2026-04-25).
+- [ ] CHANGELOG roll-up entry covering all four phases. Per-phase entries
+      already landed; a roll-up section that consolidates them is the
+      remaining work.
 
 ## Risks & rollback
 
