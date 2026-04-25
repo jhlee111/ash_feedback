@@ -268,6 +268,19 @@ Splitting 2a from 2b lets us verify the panel-addon API contract independently �
 - **Server-side `audio_max_seconds` enforcement** — caps are client-side in Phase 2; server-side only validates `byte_size` from the prepare request. Hard server-side time enforcement deferred.
 - **Transcription, voice-only feedback, system audio capture** — separate ADRs (per the active plan's "Follow-ups" list).
 
+## Addendum 2026-04-24 — D2 revised to blob metadata
+
+The Task 2b.1 recon (executed during plan execution) found two facts that revise D2:
+
+1. `AshStorage.Changes.AttachBlob` does not accept a `metadata:` option at change-declaration time.
+2. AshStorage's `AttachmentResource` extension does not add a `metadata` attribute — only `BlobResource` does.
+
+Combined with the fact that `AshStorage.Operations.prepare_direct_upload/3` already accepts a `:metadata` option that's written to the blob row at prepare time, the pragmatic choice is to persist `audio_start_offset_ms` on the **blob's** metadata map, not the attachment's.
+
+**Revised D2:** the offset is captured client-side at record-start, sent in the `/audio_uploads/prepare` POST body's `metadata` field, and persisted on the AshStorage Blob row's built-in `metadata :map`. The submit-side flow only carries `audio_clip_blob_id` through `extras` — no offset arg on the `:submit` action, no after_action hook, no Storage adapter offset handling.
+
+The spec's prior D2 framing (offset on attachment metadata) stays as historical record; the plan's "Decisions log" section captures the revised path and propagates it through Tasks 2b.3 / 2b.5 / 2b.6 / 2b.7 / 2c.3.
+
 ## Decisions log (carry-forward from ADR-0001)
 
 - **OQ1** — 5-minute max length default. ✓

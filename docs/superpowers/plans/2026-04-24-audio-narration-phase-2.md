@@ -2570,7 +2570,15 @@ git commit -m "docs(plans): mark Phase 2 shipped, link implementation plan"
 
 ## Decisions log
 
-- Task 2b.1 outcome — **<filled in during execution>**: indicates whether `AshStorage.Changes.AttachBlob` accepts a `metadata:` option at attach time (Path A) or requires an `after_action` hook (Path B).
+- **Task 2b.1 outcome (recorded 2026-04-24):** `AshStorage.Changes.AttachBlob` does NOT accept a `metadata:` option, AND AshStorage's Attachment resource has no built-in `metadata` attribute. Source: `~/Dev/ash_storage/lib/ash_storage/changes/attach_blob.ex` lines 32–37 (only `:argument` and `:attachment` validated) and `attachment_resource/transformers/setup_attachment.ex` (no metadata attribute added).
+
+  **Design pivot to "Path B" — blob metadata:** the original spec's D2 ("offset on attachment metadata") is revised. AshStorage's Blob resource has a built-in `metadata :map` attribute, AND `AshStorage.Operations.prepare_direct_upload/3` already accepts a `:metadata` option that's written to the blob row at prepare time. So the offset rides on the **blob**, not the attachment. Effects on the plan:
+  - **2b.3 (controller):** accepts an optional `"metadata"` field in the POST body and passes it through to `prepare_direct_upload(..., metadata: ...)`.
+  - **2b.5 (resource action):** the `:submit` action only adds the `:audio_clip_blob_id` argument + the `AshStorage.Changes.AttachBlob` change. **No `audio_start_offset_ms` argument. No `after_action` hook.**
+  - **2b.6 (Storage extras handler):** only extracts `audio_clip_blob_id` from `extras` and forwards it. **No offset handling.**
+  - **2b.7 (recorder JS):** at prepare time, sends `metadata: { audio_start_offset_ms: <ms> }` in the POST body. The `beforeSubmit` return only carries `audio_clip_blob_id` in `extras`.
+  - **2c.3 (round-trip test):** asserts `feedback.audio_clip.blob.metadata["audio_start_offset_ms"] == 1234`.
+  - **Phase 3 (admin playback, future):** loads `feedback |> Ash.load(audio_clip: :blob)` and reads `feedback.audio_clip.blob.metadata["audio_start_offset_ms"]`.
 
 ## Self-review (executed during plan write)
 
