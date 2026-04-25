@@ -11,7 +11,7 @@ re-filed.
 
 | # | Phase | Status | File |
 |---|-------|--------|------|
-| —  | Audio narration via AshStorage (ADR-0001) | Phases 1 + 2 shipped (2026-04-25); Phase 3 (admin playback) pending | [active/2026-04-24-audio-narration.md](active/2026-04-24-audio-narration.md) |
+| —  | Audio narration via AshStorage (ADR-0001) | Phases 1 + 2 + 3 shipped (2026-04-25); Phase 4 (docs/integration guide) pending | [active/2026-04-24-audio-narration.md](active/2026-04-24-audio-narration.md) |
 | 5e | Slack + GitHub Issues adapter stubs | proposed | [5e-integration-adapters.md](5e-integration-adapters.md) |
 | 5f | Igniter installer (`mix ash_feedback.install`) | proposed | [5f-igniter-installer.md](5f-igniter-installer.md) |
 | 5g | `AshFeedback.UI.AdminLive` (Cinder drop-in) | proposed, gated | [5g-admin-live.md](5g-admin-live.md) |

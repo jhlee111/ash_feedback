@@ -1,13 +1,19 @@
 # Plan: Audio Narration via AshStorage
 
-**Status**: Active — Phases 1 + 2 shipped (Phase 2 wraps 2026-04-25). Phase 3 (admin playback) pending.
+**Status**: Active — Phases 1 + 2 + 3 shipped (Phase 3 wraps 2026-04-25). Phase 4 (docs/integration guide) pending.
 **Drafted**: 2026-04-24
 **Promoted**: 2026-04-24 (ADR-0001 Accepted)
 **ADR**: [0001-audio-narration-via-ash-storage](../../decisions/0001-audio-narration-via-ash-storage.md)
-**Implementation plan (bite-sized tasks)**: [`docs/superpowers/plans/2026-04-24-audio-narration-phase-2.md`](../../superpowers/plans/2026-04-24-audio-narration-phase-2.md)
-**Spec (architectural decisions D1–D7 + addendum)**: [`docs/superpowers/specs/2026-04-24-audio-narration-phase-2-design.md`](../../superpowers/specs/2026-04-24-audio-narration-phase-2-design.md)
+**Implementation plans (bite-sized tasks)**:
+- Phase 2 — [`docs/superpowers/plans/2026-04-24-audio-narration-phase-2.md`](../../superpowers/plans/2026-04-24-audio-narration-phase-2.md)
+- Phase 3 — [`docs/superpowers/plans/2026-04-25-audio-narration-phase-3.md`](../../superpowers/plans/2026-04-25-audio-narration-phase-3.md)
+
+**Specs (architectural decisions)**:
+- Phase 2 — [`docs/superpowers/specs/2026-04-24-audio-narration-phase-2-design.md`](../../superpowers/specs/2026-04-24-audio-narration-phase-2-design.md)
+- Phase 3 — [`docs/superpowers/specs/2026-04-25-audio-narration-phase-3-design.md`](../../superpowers/specs/2026-04-25-audio-narration-phase-3-design.md)
+
 **Depends on**: phoenix_replay ADR-0005 (timeline event bus) shipped
-on phoenix_replay's main as of 2026-04-24 (Phases 1 + 2).
+on phoenix_replay's main as of 2026-04-24 (Phases 1 + 2 + 3).
 
 ## Phase 2 progress (as of 2026-04-25 — ✅ shipped)
 
@@ -168,49 +174,29 @@ the resulting attachment.
       the form remains usable.
 - [x] CHANGELOG entry.
 
-### Phase 3 — Admin playback synced to rrweb timeline
+### Phase 3 — Admin playback synced to rrweb timeline ✅ shipped 2026-04-25
 
-**Goal**: in the admin feedback detail view, an `<audio>` element
-plays back in lock-step with rrweb-player. Subscribes to
-phoenix_replay's `subscribeTimeline` (ADR-0005).
+Admin playback synced to the rrweb timeline ships via three library
+artifacts: `AshFeedback.Controller.AudioDownloadsController` (302 to
+a signed GET URL minted by AshStorage, TTL configurable via
+`:audio_download_url_ttl_seconds`, default 1800),
+`AshFeedbackWeb.Components.AudioPlayback.audio_playback/1` (drop-in
+function component rendered alongside `<.replay_player>`), and
+`priv/static/assets/audio_playback.js` (the LiveSocket hook that
+subscribes to phoenix_replay's `PhoenixReplayAdmin.subscribeTimeline`
+and applies the sync rules to a hidden `<audio>` element). See the
+[Phase 3 spec](../../superpowers/specs/2026-04-25-audio-narration-phase-3-design.md)
+and the [Phase 3 implementation plan](../../superpowers/plans/2026-04-25-audio-narration-phase-3.md)
+for the full design + task breakdown. Library SHAs: `f4082df`
+(3.1 controller + route + TTL), `6e49ba3` (3.1 fixes — tighter TTL
+test, assertive error handling), `e5a778f` (3.2 component),
+`6ef8f2a` (formatter `import_deps: [:phoenix]`), `c9fddfa`
+(3.3 audio_playback.js hook). Sub-phase 3.4 (demo wiring) lives in
+the demo repo, not here.
 
-**Changes**
-
-- `lib/ash_feedback_web/components/audio_playback.ex` — Phoenix
-  function component rendered alongside `<.replay_player>` in the
-  admin detail. Inputs: `audio_url`, `audio_start_offset_ms`,
-  `session_id`.
-- `priv/static/assets/audio_playback.js` — subscribes to
-  `phoenix_replay:timeline` (or `PhoenixReplayAdmin.subscribeTimeline`)
-  at `tick_hz: 60`. Sync rules per ADR-0001 Question D:
-  - `:play` → `audio.play()` if past offset
-  - `:pause` → `audio.pause()`
-  - `:seek` / `:tick` → set `audio.currentTime` from the player
-    timecode + offset
-  - `:speed_changed` → mirror to `audio.playbackRate`
-  - When `player_timecode_ms < offset`, audio stays paused at
-    t=0; resumes when the cursor crosses the offset.
-- The audio element's source is a presigned GET URL minted by an
-  `audio_downloads` controller endpoint (same authorization as
-  the rest of the admin surface — host's existing admin pipeline
-  guards it).
-
-**Tests**
-
-- Manual smoke: replay a feedback with audio attached, scrub
-  through the timeline, confirm audio stays in sync; pause/play
-  → audio mirrors; speed change → audio rate matches.
-- Cross-browser smoke (Chrome + Safari at minimum) — codec
-  fallback path.
-
-**DoD**
-
-- [ ] Audio plays in sync with rrweb cursor in the admin replay
-      view.
-- [ ] Sync survives scrub, pause/play, speed change.
-- [ ] No autoplay before the cursor crosses
-      `audio_start_offset_ms`.
-- [ ] CHANGELOG entry.
+Chrome smoke matrix passed end-to-end on `/demo/on-demand-float`
+(scrub / pause / speed change / pre-offset auto-start / ended).
+Safari smoke deferred to a separate verification pass.
 
 ### Phase 4 — Documentation + integration guide
 

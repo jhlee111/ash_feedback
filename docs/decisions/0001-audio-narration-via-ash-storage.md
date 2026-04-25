@@ -243,3 +243,21 @@ Out of scope for this ADR.
   phoenix_replay's `docs/plans/completed/2026-04-23-widget-trigger-ux.md`
   follow-ups list — original "audio belongs in ash_feedback"
   decision.
+
+## Addendum 2026-04-25 — Question D revised post-implementation
+
+The original Question D rules pre-dated the ADR-0005 timeline-bus
+implementation. Phase 3 implementation surfaced two corrections, now
+the binding contract:
+
+- The `subscribeTimeline` callback receives `play | pause | seek | ended | tick`.
+  There is **no `:speed_changed` event** — `speed` is a field on every
+  event detail. Consumers reconcile `playbackRate` whenever `speed` changes,
+  not on a dedicated kind.
+- The original rules omitted `:ended`. On `:ended`, audio pauses.
+- `tick_hz` is `10` (ADR-0005 default), not 60 — the higher rate was
+  unjustified for an audio sync workload where `playbackRate` matching
+  keeps natural drift below the perceptual threshold.
+
+The revised rule table lives in
+[`docs/superpowers/specs/2026-04-25-audio-narration-phase-3-design.md`](../superpowers/specs/2026-04-25-audio-narration-phase-3-design.md) §D3.

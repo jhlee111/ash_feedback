@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Audio narration — Phase 3 (ADR-0001). Admin playback synced to the
+  rrweb timeline.
+  - `AshFeedbackWeb.Components.AudioPlayback.audio_playback/1` —
+    drop-in function component that syncs an `<audio>` element to
+    phoenix_replay's rrweb-player timeline via
+    `PhoenixReplayAdmin.subscribeTimeline`.
+  - `GET /audio_downloads/:blob_id` (mounted by `audio_routes/1`) —
+    302-redirects to a signed URL minted by AshStorage. TTL via
+    `:audio_download_url_ttl_seconds` (default 1800).
+  - Sync contract revised vs. original ADR-0001 Question D: no
+    `:speed_changed` event (read `speed` off any event), `:ended`
+    pauses audio, `tick_hz` lowered to 10. See ADR-0001 addendum +
+    Phase 3 spec.
+  - Smoke verified in Chrome on `/demo/on-demand-float` (scrub /
+    pause / speed / pre-offset / ended). Safari smoke deferred.
+
 - Audio narration — Phase 2 (ADR-0001). Browser-side recorder, prepare
   endpoint, and submit-side wiring for capturing voice notes against
   feedback rows.
