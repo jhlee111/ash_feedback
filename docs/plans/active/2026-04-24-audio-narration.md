@@ -1,11 +1,35 @@
 # Plan: Audio Narration via AshStorage
 
-**Status**: Active — Phase 1 shipped (commit `67fd09a`); Phase 2 (recorder JS + presigned upload) next
+**Status**: Active — Phase 1 shipped (`67fd09a`); Phase 2 in progress (sub-phase 2a shipped 2026-04-24, sub-phase 2b 4/7 shipped 2026-04-25 — recorder JS still pending).
 **Drafted**: 2026-04-24
 **Promoted**: 2026-04-24 (ADR-0001 Accepted)
 **ADR**: [0001-audio-narration-via-ash-storage](../../decisions/0001-audio-narration-via-ash-storage.md)
+**Implementation plan (bite-sized tasks)**: [`docs/superpowers/plans/2026-04-24-audio-narration-phase-2.md`](../../superpowers/plans/2026-04-24-audio-narration-phase-2.md)
+**Spec (architectural decisions D1–D7 + addendum)**: [`docs/superpowers/specs/2026-04-24-audio-narration-phase-2-design.md`](../../superpowers/specs/2026-04-24-audio-narration-phase-2-design.md)
 **Depends on**: phoenix_replay ADR-0005 (timeline event bus) shipped
 on phoenix_replay's main as of 2026-04-24 (Phases 1 + 2).
+
+## Phase 2 progress (as of 2026-04-25)
+
+**Sub-phase 2a — phoenix_replay panel-addon API: ✅ shipped (8/8)** — 8 commits on `~/Dev/phoenix_replay/` main from `ed94621` through `1268fce`. Adds `<div data-slot="form-top">` slot, `window.PhoenixReplay.registerPanelAddon` JS API, addon mount loop in `renderPanel`, `extras` field on `report()` + `/submit` body, `SubmitController` extras forwarding via `submit_params["extras"]`. 79 → 82 tests.
+
+**Sub-phase 2b — ash_feedback audio addon: 4/7 shipped.**
+
+| | Status | Commit(s) |
+|---|---|---|
+| 2b.1 — Recon: AttachBlob metadata support | ✅ recon only — design pivoted to D2 revision (offset on **blob** metadata, not attachment) | (no commit; pivot captured in `9be325b`) |
+| 2b.2 — `AshFeedback.Config` helpers | ✅ | `2c21ba2` |
+| 2b.3 — `AudioUploadsController.prepare/2` | ✅ (initial + spec-review fix) | `60f9ef0`, `e608f28` |
+| 2b.4 — `AshFeedback.Router.audio_routes/1` | ✅ (initial + alias-accumulation fix) | `654ea52`, `28bee79` |
+| 2b.5 — `:submit` action `audio_clip_blob_id` arg + `AttachBlob` change | ⏸ pending | — |
+| 2b.6 — `AshFeedback.Storage` extras → `:submit` arg | ⏸ pending | — |
+| 2b.7 — Audio recorder JS + CSS (~200 LOC, MediaRecorder, codec probe, state machine, prepare→PUT flow) | ⏸ pending | — |
+
+17 → 29 tests at last commit. Two re-review cycles caught real bugs (production body double-parse, scope alias accumulation).
+
+**Pending sub-phases:** 2c Firkin round-trip test, 2d demo wiring + manual smoke, 2e docs + library SHA bump.
+
+
 
 ## Why
 
