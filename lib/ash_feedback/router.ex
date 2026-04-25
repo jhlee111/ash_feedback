@@ -18,8 +18,8 @@ defmodule AshFeedback.Router do
     path = Keyword.get(opts, :path, "/audio_uploads")
 
     quote bind_quoted: [path: path] do
-      scope path, AshFeedback.Controller do
-        post "/prepare", AudioUploadsController, :prepare
+      scope path, alias: false do
+        post "/prepare", AshFeedback.Controller.AudioUploadsController, :prepare
       end
     end
   end

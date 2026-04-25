@@ -30,4 +30,19 @@ defmodule AshFeedback.RouterTest do
     assert route
     assert route.verb == :post
   end
+
+  defmodule TestRouterAliasedHost do
+    use Phoenix.Router
+    require AshFeedback.Router
+
+    scope "/", SomeApp.Web do
+      AshFeedback.Router.audio_routes()
+    end
+  end
+
+  test "resolves controller correctly under an aliased host scope" do
+    route = Enum.find(TestRouterAliasedHost.__routes__(), &(&1.path == "/audio_uploads/prepare"))
+    assert route
+    assert route.plug == AshFeedback.Controller.AudioUploadsController
+  end
 end
