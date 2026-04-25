@@ -61,10 +61,12 @@ defmodule AshFeedback.Resources.Feedback do
     pubsub_module = Keyword.get(opts, :pubsub)
     paper_trail_actor = Keyword.get(opts, :paper_trail_actor)
     _ = Keyword.get(opts, :prefix, "fbk")
-    # ADR-0001: AshStorage attachment resource for audio narration.
-    # Required when `audio_enabled` is true at compile time. Host
-    # defines its own AttachmentResource (see AshStorage's docs);
-    # we just route the `has_one_attached` declaration to it.
+    # ADR-0001: AshStorage blob + attachment resources for audio narration.
+    # Both required when `audio_enabled` is true at compile time. Host
+    # defines its own BlobResource + AttachmentResource (see AshStorage's
+    # docs); we route the section-level `storage do …` declaration to
+    # them so a single `has_one_attached :audio_clip` entity wires up.
+    audio_blob_resource = Keyword.get(opts, :audio_blob_resource)
     audio_attachment_resource = Keyword.get(opts, :audio_attachment_resource)
 
     notifiers =
@@ -91,19 +93,23 @@ defmodule AshFeedback.Resources.Feedback do
       Application.get_env(:ash_feedback, :audio_enabled, false) and
         Code.ensure_loaded?(AshStorage)
 
-    if audio_enabled? and is_nil(audio_attachment_resource) do
+    if audio_enabled? and
+         (is_nil(audio_blob_resource) or is_nil(audio_attachment_resource)) do
       raise ArgumentError, """
       AshFeedback audio narration is enabled (config :ash_feedback,
-      audio_enabled: true) but `:audio_attachment_resource` was not
-      passed to `use AshFeedback.Resources.Feedback`.
+      audio_enabled: true) but `:audio_blob_resource` and/or
+      `:audio_attachment_resource` were not passed to
+      `use AshFeedback.Resources.Feedback`.
 
-      Define an AshStorage AttachmentResource in your host (see
-      `AshStorage` docs and `dev/resources/attachment.ex` in the
-      ash_storage repo for a reference shape) and pass it:
+      Define an AshStorage BlobResource + AttachmentResource pair in
+      your host (see `AshStorage` docs and the reference shapes under
+      `dev/resources/{blob,attachment}.ex` in the ash_storage repo)
+      and pass both:
 
           use AshFeedback.Resources.Feedback,
             domain: MyApp.Feedback,
             repo: MyApp.Repo,
+            audio_blob_resource: MyApp.Storage.Blob,
             audio_attachment_resource: MyApp.Storage.Attachment
 
       Or set `config :ash_feedback, audio_enabled: false` to disable
@@ -223,17 +229,23 @@ defmodule AshFeedback.Resources.Feedback do
       # Only emitted when both the runtime opt-in
       # (`config :ash_feedback, audio_enabled: true`) and the optional
       # `:ash_storage` dep are present at compile time. `dependent:
-      # :purge` makes the attachment + blob (and the underlying S3
-      # object) follow the parent feedback row's lifecycle, matching
-      # ADR-0001 Question E.
+      # :purge` on the entity makes the attachment + blob (and the
+      # underlying S3 object) follow the parent feedback row's
+      # lifecycle, matching ADR-0001 Question E.
+      #
+      # AshStorage 0.1's DSL requires `blob_resource` and
+      # `attachment_resource` at the **section** level (they're shared
+      # across all attachments declared on the resource). The host
+      # provides both via the `:audio_blob_resource` and
+      # `:audio_attachment_resource` opts.
       unquote(
         if audio_enabled? do
           quote do
             storage do
-              has_one_attached :audio_clip,
-                attachment_resource: unquote(audio_attachment_resource) do
-                dependent :purge
-              end
+              blob_resource unquote(audio_blob_resource)
+              attachment_resource unquote(audio_attachment_resource)
+
+              has_one_attached :audio_clip, dependent: :purge
             end
           end
         end
