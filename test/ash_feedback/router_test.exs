@@ -45,4 +45,33 @@ defmodule AshFeedback.RouterTest do
     assert route
     assert route.plug == AshFeedback.Controller.AudioUploadsController
   end
+
+  test "audio_routes/0 mounts GET /audio_uploads/audio_downloads/:blob_id" do
+    routes = TestRouter.__routes__()
+    route = Enum.find(routes, &(&1.path == "/audio_uploads/audio_downloads/:blob_id"))
+
+    assert route
+    assert route.verb == :get
+    assert route.plug == AshFeedback.Controller.AudioDownloadsController
+    assert route.plug_opts == :show
+  end
+
+  test "audio_routes(path: ...) supports custom mount for the show route" do
+    routes = TestRouterCustomPath.__routes__()
+    route = Enum.find(routes, &(&1.path == "/api/audio/audio_downloads/:blob_id"))
+
+    assert route
+    assert route.verb == :get
+  end
+
+  test "show route resolves controller correctly under an aliased host scope" do
+    route =
+      Enum.find(
+        TestRouterAliasedHost.__routes__(),
+        &(&1.path == "/audio_uploads/audio_downloads/:blob_id")
+      )
+
+    assert route
+    assert route.plug == AshFeedback.Controller.AudioDownloadsController
+  end
 end

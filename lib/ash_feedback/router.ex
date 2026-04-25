@@ -20,6 +20,10 @@ defmodule AshFeedback.Router do
     quote bind_quoted: [path: path] do
       scope path, alias: false do
         post "/prepare", AshFeedback.Controller.AudioUploadsController, :prepare
+
+        get "/audio_downloads/:blob_id",
+            AshFeedback.Controller.AudioDownloadsController,
+            :show
       end
     end
   end

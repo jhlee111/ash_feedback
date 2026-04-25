@@ -53,4 +53,15 @@ defmodule AshFeedback.Config do
   def audio_max_seconds do
     Application.get_env(:ash_feedback, :audio_max_seconds, 300)
   end
+
+  @doc """
+  Signed-URL TTL for audio download redirects.
+
+  Default 1800 seconds (30 minutes) — long enough that scrub/pause cycles
+  on a single admin mount don't outrun the URL; short enough to bound token
+  exposure. Hosts override per policy.
+  """
+  def audio_download_url_ttl_seconds do
+    Application.get_env(:ash_feedback, :audio_download_url_ttl_seconds, 1800)
+  end
 end
