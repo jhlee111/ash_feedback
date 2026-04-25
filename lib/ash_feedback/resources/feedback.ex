@@ -396,6 +396,25 @@ defmodule AshFeedback.Resources.Feedback do
           upsert? true
           upsert_identity :unique_session_id
 
+          # ADR-0001 / D2-revised: when audio is compile-time enabled, the
+          # action accepts an optional blob id (minted by the prepare-upload
+          # controller in `AshFeedback.Controller.AudioUploadsController`)
+          # and `AshStorage.Changes.AttachBlob` wires it to the
+          # `:audio_clip` `has_one_attached`. The narration start offset
+          # rides on the blob's metadata map (set at prepare-time) so it
+          # is intentionally NOT an action argument — see the plan's
+          # Decisions log entry for Task 2b.1.
+          unquote(
+            if audio_enabled? do
+              quote do
+                argument :audio_clip_blob_id, :uuid, allow_nil?: true
+
+                change {AshStorage.Changes.AttachBlob,
+                        argument: :audio_clip_blob_id, attachment: :audio_clip}
+              end
+            end
+          )
+
           change fn changeset, _ctx ->
             meta = Ash.Changeset.get_attribute(changeset, :metadata) || %{}
 
