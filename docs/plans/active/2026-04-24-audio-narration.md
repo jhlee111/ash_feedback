@@ -1,10 +1,11 @@
 # Plan: Audio Narration via AshStorage
 
-**Status**: Proposal — pending ADR-0001 acceptance
+**Status**: Active — Phase 1 in progress
 **Drafted**: 2026-04-24
+**Promoted**: 2026-04-24 (ADR-0001 Accepted)
 **ADR**: [0001-audio-narration-via-ash-storage](../../decisions/0001-audio-narration-via-ash-storage.md)
-**Depends on**: phoenix_replay ADR-0005 (timeline event bus) being
-shipped on phoenix_replay's main.
+**Depends on**: phoenix_replay ADR-0005 (timeline event bus) shipped
+on phoenix_replay's main as of 2026-04-24 (Phases 1 + 2).
 
 ## Why
 
@@ -15,49 +16,68 @@ implementation plan.
 
 ## Phases
 
-### Phase 1 — AshStorage wiring + Feedback resource attachment
+### Phase 1 — AshStorage wiring + Feedback resource hook
 
 **Goal**: ash_feedback declares an optional `:audio_clip`
-attachment on its Feedback resource via AshStorage, gated by an
-`audio_enabled` config flag and the `ash_storage` optional dep.
+attachment on its Feedback resource via AshStorage, gated by a
+**compile-time** flag plus the `ash_storage` optional dep. Default
+behavior is unchanged for hosts who don't enable it.
 
-**Changes**
+**Refined scope (vs. original draft)**
+
+The original draft conflated three concerns into Phase 1; the
+recon against `~/Dev/ash_storage` (2026-04-24) and ash_feedback's
+existing `use`-macro pattern showed the scope is naturally tighter:
+
+- **Resource shapes**: not bundled. AshStorage's `BlobResource` /
+  `AttachmentResource` are themselves `use`-style extensions, so
+  the host concretizes — same pattern ash_feedback already uses
+  for `Feedback`. ADR-0001 OQ3 ("single bundled module") is
+  effectively reframed: ash_feedback ships the DSL hook, the host
+  defines its own concrete blob/attachment resources (5f's
+  installer will scaffold those).
+- **`audio_start_offset_ms` attribute** moves to **Phase 2**: it's
+  written when audio is recorded, so the column / metadata-key
+  decision belongs with the recorder code, not the resource shape.
+- **Migration scaffolding** moves to **5f** (Igniter installer) —
+  no point landing migration generator hooks before the installer
+  itself exists.
+
+**Changes (Phase 1)**
 
 - `mix.exs`: add `{:ash_storage, "~> 0.1", optional: true}`.
-- `lib/ash_feedback/feedback.ex` (or wherever the Feedback resource
-  lives): inside an `if Code.ensure_loaded?(AshStorage) do` block,
-  declare `has_one_attached :audio_clip`. Add an
-  `:audio_start_offset_ms` attribute (`integer`, allow_nil?: true).
-- New module `AshFeedback.Audio.Storage` (or extension on existing
-  storage module) — expose helpers for hosts to install the
-  AshStorage `blob` + `attachment` resources in their domain. Two
-  shapes: a single bundled resource (`AshFeedback.Audio.Blob` /
-  `Attachment`) the host can use directly, OR a config knob that
-  lets the host point at their own AshStorage resources.
-- Config:
-  - `config :ash_feedback, audio_enabled: true | false` (default
-    `false`).
-  - `config :ash_feedback, audio_max_seconds: 300` (default 5min,
-    OQ1 from ADR-0001).
-- Migration generator updates: when audio is enabled at install
-  time, scaffold the AshStorage `storage_blobs` +
-  `storage_attachments` tables (composes with phoenix_replay's
-  base migration).
+- `lib/ash_feedback/resources/feedback.ex` macro:
+  - Read `Application.compile_env(:ash_feedback, :audio_enabled,
+    false)` AND `Code.ensure_loaded?(AshStorage)` at module-eval
+    time.
+  - When both true: append `AshStorage` to the `extensions:` list
+    on the resource AND inject a `storage do has_one_attached
+    :audio_clip do dependent :purge end end` block.
+  - Otherwise: zero change to the emitted resource (default-off,
+    no FK column, no extension surface).
+- Config: document `config :ash_feedback, audio_enabled: true`
+  (default `false`) in README. `audio_max_seconds` lives with the
+  recorder (Phase 2).
+- README: short "Audio narration (optional)" section + pointer at
+  `~/Dev/ash_storage/dev/resources/post.ex` for the host's
+  blob/attachment setup until 5f scaffolds it.
 
 **Tests**
 
-- Resource compile test: with `ash_storage` available + `audio_enabled:
-  true`, the Feedback resource exposes `:audio_clip` relationship.
-- Without `ash_storage`: resource still compiles, no `:audio_clip`,
-  no errors.
-- Optional dep guard test (`Code.ensure_loaded?` path).
+- Existing test suite must pass with audio disabled (default).
+- Compile-enabled test fixture deferred to Phase 2 — adding
+  `ash_storage` to dev/test deps isn't worth the noise just to
+  test "the macro injects an extension". Phase 2 brings in the
+  dep for the recorder + we cover both paths there.
 
 **DoD**
 
-- [ ] `:audio_clip` attachment + `:audio_start_offset_ms` field
-      live on the Feedback resource when audio is enabled.
-- [ ] Compiles cleanly without `ash_storage` in deps.
-- [ ] CHANGELOG entry under "Added — Audio narration (Phase 1)".
+- [ ] `mix.exs` carries the optional dep.
+- [ ] Resource macro injects AshStorage + `has_one_attached
+      :audio_clip` when both flags are on; default behavior
+      unchanged.
+- [ ] `mix test` green (audio disabled).
+- [ ] README + CHANGELOG entries.
 
 ### Phase 2 — Recorder JS + presigned upload
 
@@ -201,7 +221,7 @@ phoenix_replay's `subscribeTimeline` (ADR-0005).
 - [ ] **OQ4** — per-host config flag + per-submission user
       affordance.
 
-Promote to `active/` once ADR-0001 is Accepted.
+Promoted to `active/` 2026-04-24 (ADR-0001 Accepted).
 
 ## Follow-ups (separate plans)
 

@@ -61,6 +61,11 @@ defmodule AshFeedback.Resources.Feedback do
     pubsub_module = Keyword.get(opts, :pubsub)
     paper_trail_actor = Keyword.get(opts, :paper_trail_actor)
     _ = Keyword.get(opts, :prefix, "fbk")
+    # ADR-0001: AshStorage attachment resource for audio narration.
+    # Required when `audio_enabled` is true at compile time. Host
+    # defines its own AttachmentResource (see AshStorage's docs);
+    # we just route the `has_one_attached` declaration to it.
+    audio_attachment_resource = Keyword.get(opts, :audio_attachment_resource)
 
     notifiers =
       if pubsub_module do
@@ -69,11 +74,52 @@ defmodule AshFeedback.Resources.Feedback do
         []
       end
 
+    # ADR-0001: audio narration. Compile-time gate so disabled hosts
+    # don't carry the AshStorage extension surface or any audio FK
+    # column. `Code.ensure_loaded?` guards against the case where a
+    # host flips the flag without adding the optional dep to mix.exs.
+    #
+    # `Application.get_env/3` is used (not `compile_env`) because
+    # `compile_env` cannot be called from inside a `defmacro` body.
+    # The value is still resolved at the host's compile time — when
+    # this `__using__/1` expansion runs against the host's `use
+    # AshFeedback.Resources.Feedback`. The trade-off vs `compile_env`
+    # is no automatic Mix recompile-on-flag-change; hosts that flip
+    # the flag must `mix compile --force` (or just `touch` the
+    # resource file). Acceptable for an install-time decision.
+    audio_enabled? =
+      Application.get_env(:ash_feedback, :audio_enabled, false) and
+        Code.ensure_loaded?(AshStorage)
+
+    if audio_enabled? and is_nil(audio_attachment_resource) do
+      raise ArgumentError, """
+      AshFeedback audio narration is enabled (config :ash_feedback,
+      audio_enabled: true) but `:audio_attachment_resource` was not
+      passed to `use AshFeedback.Resources.Feedback`.
+
+      Define an AshStorage AttachmentResource in your host (see
+      `AshStorage` docs and `dev/resources/attachment.ex` in the
+      ash_storage repo for a reference shape) and pass it:
+
+          use AshFeedback.Resources.Feedback,
+            domain: MyApp.Feedback,
+            repo: MyApp.Repo,
+            audio_attachment_resource: MyApp.Storage.Attachment
+
+      Or set `config :ash_feedback, audio_enabled: false` to disable
+      audio narration.
+      """
+    end
+
+    extensions =
+      [AshStateMachine, AshPaperTrail.Resource] ++
+        if(audio_enabled?, do: [AshStorage], else: [])
+
     quote location: :keep do
       use Ash.Resource,
         domain: unquote(domain),
         data_layer: AshPostgres.DataLayer,
-        extensions: [AshStateMachine, AshPaperTrail.Resource],
+        extensions: unquote(extensions),
         notifiers: unquote(notifiers)
 
       require Ash.Query
@@ -172,6 +218,26 @@ defmodule AshFeedback.Resources.Feedback do
           )
         end
       end
+
+      # ADR-0001 Phase 1 — audio narration attachment via AshStorage.
+      # Only emitted when both the runtime opt-in
+      # (`config :ash_feedback, audio_enabled: true`) and the optional
+      # `:ash_storage` dep are present at compile time. `dependent:
+      # :purge` makes the attachment + blob (and the underlying S3
+      # object) follow the parent feedback row's lifecycle, matching
+      # ADR-0001 Question E.
+      unquote(
+        if audio_enabled? do
+          quote do
+            storage do
+              has_one_attached :audio_clip,
+                attachment_resource: unquote(audio_attachment_resource) do
+                dependent :purge
+              end
+            end
+          end
+        end
+      )
 
       code_interface do
         define :submit, action: :submit

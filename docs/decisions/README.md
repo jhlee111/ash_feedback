@@ -4,7 +4,7 @@ Ash-specific 결정의 기록 (resource shape, policy, scope, paper trail, triag
 
 | # | Title | Status | Date |
 |---|-------|--------|------|
-| [0001](./0001-audio-narration-via-ash-storage.md) | Audio Narration via AshStorage | Proposed | 2026-04-24 |
+| [0001](./0001-audio-narration-via-ash-storage.md) | Audio Narration via AshStorage | Accepted | 2026-04-24 |
 
 ## Rules
 

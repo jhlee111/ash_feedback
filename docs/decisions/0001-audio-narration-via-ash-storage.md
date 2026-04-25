@@ -1,6 +1,6 @@
 # ADR-0001: Audio Narration via AshStorage
 
-**Status**: Proposed
+**Status**: Accepted
 **Date**: 2026-04-24
 **Depends on**: phoenix_replay ADR-0005 (Replay Player Timeline
 Event Bus)

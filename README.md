@@ -237,6 +237,52 @@ but not the acting user. Enable actor tracking by passing
 `mix ash.codegen` afterward — AshPaperTrail adds a `user_id` column
 to the versions table.
 
+## Audio narration (optional, in progress)
+
+ADR-0001 introduces voice narration on feedback submissions: the
+reporter records a short audio clip while submitting, and the admin's
+replay view plays it in sync with the rrweb cursor. Audio is stored
+through [AshStorage](https://github.com/ash-project/ash_storage) (S3
+or any S3-compatible bucket) so blob lifecycle, presigned uploads,
+and policies all sit on the standard Ash extension.
+
+**Status**: Phase 1 shipped — the resource macro accepts the audio
+attachment behind a compile-time gate. Phases 2 (recorder UI +
+upload) and 3 (admin playback synced to phoenix_replay's timeline
+event bus, ADR-0005) are the next deliverables.
+
+**Enabling Phase 1 today**:
+
+1. Add `{:ash_storage, "~> 0.1"}` to your own `mix.exs`.
+2. Set `config :ash_feedback, audio_enabled: true` in `config.exs`
+   and recompile. Both flags must be set for the macro to extend
+   `Feedback` with `has_one_attached :audio_clip`.
+3. Define host-side `BlobResource` and `AttachmentResource` modules
+   (AshStorage's pattern). See
+   [`dev/resources/post.ex`](https://github.com/ash-project/ash_storage/blob/main/dev/resources/post.ex),
+   [`blob.ex`](https://github.com/ash-project/ash_storage/blob/main/dev/resources/blob.ex),
+   and
+   [`attachment.ex`](https://github.com/ash-project/ash_storage/blob/main/dev/resources/attachment.ex)
+   in the AshStorage repo for the canonical shapes until Phase 5f's
+   installer scaffolds them.
+4. Pass your `AttachmentResource` to the Feedback `use` call so
+   the `has_one_attached` declaration knows where to attach:
+
+   ```elixir
+   defmodule MyApp.Feedback.Entry do
+     use AshFeedback.Resources.Feedback,
+       domain: MyApp.Feedback,
+       repo: MyApp.Repo,
+       audio_attachment_resource: MyApp.Storage.Attachment
+   end
+   ```
+
+5. Run `mix ash.codegen audio_attachment` to add the storage tables.
+
+Audio behavior is opt-in at every layer — hosts who skip the config
+flag get the existing description-only feedback flow with zero
+change.
+
 ## Deploy pipeline integration
 
 The two `list_*` read actions + `promote_verified_to_resolved` generic

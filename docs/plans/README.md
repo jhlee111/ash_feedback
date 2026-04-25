@@ -11,6 +11,7 @@ re-filed.
 
 | # | Phase | Status | File |
 |---|-------|--------|------|
+| —  | Audio narration via AshStorage (ADR-0001) | Phase 1 in progress | [active/2026-04-24-audio-narration.md](active/2026-04-24-audio-narration.md) |
 | 5e | Slack + GitHub Issues adapter stubs | proposed | [5e-integration-adapters.md](5e-integration-adapters.md) |
 | 5f | Igniter installer (`mix ash_feedback.install`) | proposed | [5f-igniter-installer.md](5f-igniter-installer.md) |
 | 5g | `AshFeedback.UI.AdminLive` (Cinder drop-in) | proposed, gated | [5g-admin-live.md](5g-admin-live.md) |
@@ -18,9 +19,7 @@ re-filed.
 
 ## Proposals (drafted, not yet committed)
 
-| Proposal | Depends on | File |
-|----------|------------|------|
-| Audio narration via AshStorage (ADR-0001) | ADR-0001 acceptance + phoenix_replay ADR-0005 implementation | [proposals/audio-narration.md](proposals/audio-narration.md) |
+_None._
 
 **Gated** = do not start until an upstream precondition clears. For
 5g that's "primary host's admin UI stable for 2–3 weeks of real QA
