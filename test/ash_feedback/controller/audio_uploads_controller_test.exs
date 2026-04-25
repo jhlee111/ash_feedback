@@ -16,10 +16,11 @@ defmodule AshFeedback.Controller.AudioUploadsControllerTest do
   end
 
   defp call(params) do
-    body = Jason.encode!(params)
-
-    conn(:post, "/prepare", body)
+    conn(:post, "/prepare", Jason.encode!(params))
     |> put_req_header("content-type", "application/json")
+    |> Plug.Parsers.call(
+      Plug.Parsers.init(parsers: [:json], json_decoder: Jason, pass: ["*/*"])
+    )
     |> AudioUploadsController.call(AudioUploadsController.init(:prepare))
   end
 
