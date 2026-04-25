@@ -44,9 +44,14 @@ defmodule AshFeedback.Controller.AudioUploadsController do
         })
 
       {:error, error} ->
-        conn |> put_status(422) |> json(%{error: Exception.message(error)})
+        conn |> put_status(422) |> json(%{error: error_message(error)})
     end
   end
+
+  defp error_message(error) when is_exception(error), do: Exception.message(error)
+  defp error_message(error) when is_atom(error), do: Atom.to_string(error)
+  defp error_message(error) when is_binary(error), do: error
+  defp error_message(error), do: inspect(error)
 
   def prepare(conn, _params) do
     conn |> put_status(422) |> json(%{error: "filename is required"})

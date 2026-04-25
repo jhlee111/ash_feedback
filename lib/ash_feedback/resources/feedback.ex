@@ -51,6 +51,12 @@ defmodule AshFeedback.Resources.Feedback do
   defmacro __using__(opts) do
     domain = Keyword.fetch!(opts, :domain)
     repo = Keyword.fetch!(opts, :repo)
+    # Optional — only consulted by AshStorage's per-resource service
+    # config (`config :otp_app, MyApp.Feedback.Entry, storage: [...]`).
+    # Without it, AshStorage falls back to the per-entity `:service`
+    # entry-option on `has_one_attached`, which the macro doesn't emit.
+    # Audio-disabled hosts can leave it nil.
+    otp_app = Keyword.get(opts, :otp_app)
     assignee_resource = Keyword.get(opts, :assignee_resource)
     # Host's User primary-key Ash type. Defaults to `:uuid` short-name
     # so bare-Ash hosts still work. Hosts using AshPrefixedId MUST pass
@@ -121,12 +127,17 @@ defmodule AshFeedback.Resources.Feedback do
       [AshStateMachine, AshPaperTrail.Resource] ++
         if(audio_enabled?, do: [AshStorage], else: [])
 
-    quote location: :keep do
-      use Ash.Resource,
-        domain: unquote(domain),
+    use_opts =
+      [
+        domain: domain,
         data_layer: AshPostgres.DataLayer,
-        extensions: unquote(extensions),
-        notifiers: unquote(notifiers)
+        extensions: extensions,
+        notifiers: notifiers
+      ]
+      |> then(fn opts -> if otp_app, do: Keyword.put(opts, :otp_app, otp_app), else: opts end)
+
+    quote location: :keep do
+      use Ash.Resource, unquote(use_opts)
 
       require Ash.Query
       require Ash.Expr
