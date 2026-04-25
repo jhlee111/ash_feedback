@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Audio addon scoped to Record-and-report mode (2026-04-25)
+
+- The audio recorder addon now declares `modes: ["on_demand"]` and only mounts
+  on widgets whose configured `recording` is `:on_demand` ("Record-and-report
+  mode"). On `:continuous` widgets the addon is skipped — voice commentary on
+  retrospective replays cannot be synced to the rrweb timeline.
+- Filter is independent of control style: a `:headless` + `:on_demand` widget
+  mounts the addon normally (the host drives start/stop, but recording lifecycle
+  semantics are what gates audio meaningfulness).
+- Button label changed from "🎙 Record voice note" to "🎙 Add voice commentary"
+  for clearer intent.
+
+Requires phoenix_replay ≥ 2026-04-25 (mode-aware panel-addon API). Older
+phoenix_replay silently ignores the `modes` opt and mounts the addon everywhere
+(graceful degradation — old behavior).
+
 ### Added
 
 - Audio narration — Phase 3 (ADR-0001). Admin playback synced to the

@@ -250,6 +250,15 @@ clip in sync with the rrweb cursor.
 endpoint, submit-side wiring. Phase 3 (admin playback synced to
 phoenix_replay's timeline event bus, ADR-0005) is the next deliverable.
 
+> **Mode availability**: the audio recorder is registered with
+> `modes: ["on_demand"]`. It mounts only on widgets whose `recording` is
+> `:on_demand` ("Record-and-report mode"). On `:continuous` widgets the addon
+> is silently skipped — voice commentary on cached/retrospective replays cannot
+> be synced to the rrweb timeline. Control style (`:float` / `:headless`) is
+> independent of this filter. See phoenix_replay's mode-aware panel-addons
+> spec (`docs/superpowers/specs/2026-04-25-mode-aware-panel-addons.md`) for
+> the full IA framework.
+
 ### Enabling
 
 ```elixir
