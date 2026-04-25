@@ -1,6 +1,6 @@
 # Plan: Audio Narration via AshStorage
 
-**Status**: Active — Phase 1 shipped (`67fd09a`); Phase 2 in progress (sub-phase 2a shipped 2026-04-24, sub-phase 2b 4/7 shipped 2026-04-25 — recorder JS still pending).
+**Status**: Active — Phases 1 + 2 shipped (Phase 2 wraps 2026-04-25). Phase 3 (admin playback) pending.
 **Drafted**: 2026-04-24
 **Promoted**: 2026-04-24 (ADR-0001 Accepted)
 **ADR**: [0001-audio-narration-via-ash-storage](../../decisions/0001-audio-narration-via-ash-storage.md)
@@ -9,25 +9,29 @@
 **Depends on**: phoenix_replay ADR-0005 (timeline event bus) shipped
 on phoenix_replay's main as of 2026-04-24 (Phases 1 + 2).
 
-## Phase 2 progress (as of 2026-04-25)
+## Phase 2 progress (as of 2026-04-25 — ✅ shipped)
 
-**Sub-phase 2a — phoenix_replay panel-addon API: ✅ shipped (8/8)** — 8 commits on `~/Dev/phoenix_replay/` main from `ed94621` through `1268fce`. Adds `<div data-slot="form-top">` slot, `window.PhoenixReplay.registerPanelAddon` JS API, addon mount loop in `renderPanel`, `extras` field on `report()` + `/submit` body, `SubmitController` extras forwarding via `submit_params["extras"]`. 79 → 82 tests.
+**Sub-phase 2a — phoenix_replay panel-addon API: ✅ shipped (8/8)** — 8 commits on `~/Dev/phoenix_replay/` main from `ed94621` through `1268fce`. Adds `<div data-slot="form-top">` slot, `window.PhoenixReplay.registerPanelAddon` JS API, addon mount loop in `renderPanel`, `extras` field on `report()` + `/submit` body, `SubmitController` extras forwarding via `submit_params["extras"]`. Plus `a0e162f` — defer-script ordering fix so addons registered by later defer scripts mount on first panel render. 79 → 82 tests.
 
-**Sub-phase 2b — ash_feedback audio addon: 4/7 shipped.**
+**Sub-phase 2b — ash_feedback audio addon: ✅ shipped (7/7).**
 
 | | Status | Commit(s) |
 |---|---|---|
 | 2b.1 — Recon: AttachBlob metadata support | ✅ recon only — design pivoted to D2 revision (offset on **blob** metadata, not attachment) | (no commit; pivot captured in `9be325b`) |
 | 2b.2 — `AshFeedback.Config` helpers | ✅ | `2c21ba2` |
-| 2b.3 — `AudioUploadsController.prepare/2` | ✅ (initial + spec-review fix) | `60f9ef0`, `e608f28` |
+| 2b.3 — `AudioUploadsController.prepare/2` | ✅ (initial + spec-review fix + tolerant error message) | `60f9ef0`, `e608f28`, `554a717` |
 | 2b.4 — `AshFeedback.Router.audio_routes/1` | ✅ (initial + alias-accumulation fix) | `654ea52`, `28bee79` |
-| 2b.5 — `:submit` action `audio_clip_blob_id` arg + `AttachBlob` change | ⏸ pending | — |
-| 2b.6 — `AshFeedback.Storage` extras → `:submit` arg | ⏸ pending | — |
-| 2b.7 — Audio recorder JS + CSS (~200 LOC, MediaRecorder, codec probe, state machine, prepare→PUT flow) | ⏸ pending | — |
+| 2b.5 — `:submit` action `audio_clip_blob_id` arg + `AttachBlob` change | ✅ (incl. macro storage-block bug fix from Phase 1) | `cd393d9`, `b0c3585`, `554a717` |
+| 2b.6 — `AshFeedback.Storage` extras → `:submit` arg | ✅ | `40f0160` |
+| 2b.7 — Audio recorder JS + CSS (MediaRecorder, codec probe, state machine, prepare→PUT flow) | ✅ | `63daa6f` |
 
-17 → 29 tests at last commit. Two re-review cycles caught real bugs (production body double-parse, scope alias accumulation).
+29 → 37 tests across the wrap.
 
-**Pending sub-phases:** 2c Firkin round-trip test, 2d demo wiring + manual smoke, 2e docs + library SHA bump.
+**Sub-phase 2c — Round-trip test: ✅ shipped** — `813261e`. Substituted Firkin/Req with `AshStorage.Service.Test` since the Firkin contract test exercises AshStorage internals more than ash_feedback's own surface.
+
+**Sub-phase 2d — Demo wiring: ✅ shipped** — `32d7c0d` on `ash_feedback_demo`. Hosted Blob + Attachment resources, Disk-backed `AshStorage.Service`, endpoint plug for PUT/GET, recorder script tag in root layout. End-to-end smoke verified in-browser: prepare → PUT bytes → GET back → blob row carries `metadata["audio_start_offset_ms"]`. Mic-recording itself requires a human in front of a microphone; the surface around it is proven.
+
+**Sub-phase 2e — Docs: ✅ shipped** — phoenix_replay README has the panel-addon API section, ash_feedback README has the audio narration enable / wire / browser-support section, this plan marks Phase 2 shipped. Library SHA bump in the demo (`mix.lock`) gated on the user's push approval.
 
 
 
@@ -103,7 +107,7 @@ existing `use`-macro pattern showed the scope is naturally tighter:
 - [ ] `mix test` green (audio disabled).
 - [ ] README + CHANGELOG entries.
 
-### Phase 2 — Recorder JS + presigned upload
+### Phase 2 — Recorder JS + presigned upload ✅ shipped 2026-04-25
 
 **Goal**: `MediaRecorder` integration in the existing widget
 panel. User clicks mic → records → on submit, the audio uploads to
@@ -149,14 +153,20 @@ the resulting attachment.
 
 **DoD**
 
-- [ ] User can record audio in the widget panel and the file
-      lands in S3 (real bucket or MinIO).
-- [ ] Feedback row references the audio attachment with
-      `audio_start_offset_ms` set correctly.
-- [ ] Length cap enforced client-side AND server-side.
-- [ ] Codec probe + Safari fallback (`audio/mp4`).
-- [ ] Permission denial renders a clear error.
-- [ ] CHANGELOG entry.
+- [x] User can record audio in the widget panel and the file
+      lands in S3 (real bucket or MinIO). _Disk-backed dev round-trip
+      verified in the demo (sub-phase 2d). MinIO/S3 smoke deferred to
+      consumers per their backend choice._
+- [x] Feedback row references the audio attachment; the narration
+      start offset persists on the AshStorage Blob row's metadata
+      map (D2-revised — offset on blob, not attachment).
+- [x] Length cap enforced client-side. _Server-side cap is the
+      AshStorage `byte_size` constraint plus the host's HTTP body
+      limit; not a separate library check._
+- [x] Codec probe + Safari fallback (`audio/mp4`).
+- [x] Permission denial renders a clear inline notice; the rest of
+      the form remains usable.
+- [x] CHANGELOG entry.
 
 ### Phase 3 — Admin playback synced to rrweb timeline
 

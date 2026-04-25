@@ -237,47 +237,105 @@ but not the acting user. Enable actor tracking by passing
 `mix ash.codegen` afterward — AshPaperTrail adds a `user_id` column
 to the versions table.
 
-## Audio narration (optional, in progress)
+## Audio narration (optional)
 
-ADR-0001 introduces voice narration on feedback submissions: the
-reporter records a short audio clip while submitting, and the admin's
-replay view plays it in sync with the rrweb cursor. Audio is stored
-through [AshStorage](https://github.com/ash-project/ash_storage) (S3
-or any S3-compatible bucket) so blob lifecycle, presigned uploads,
-and policies all sit on the standard Ash extension.
+ADR-0001 — voice narration on feedback submissions. The reporter taps
+🎙 in the widget panel, records a short clip, and submits; the audio
+file rides through [AshStorage](https://github.com/ash-project/ash_storage)
+(presigned upload to S3 or any compatible backend) and links to the
+feedback row. The admin replay view (Phase 3, in progress) plays the
+clip in sync with the rrweb cursor.
 
-**Status**: Phase 1 shipped — the resource macro accepts the audio
-attachment behind a compile-time gate. Phases 2 (recorder UI +
-upload) and 3 (admin playback synced to phoenix_replay's timeline
-event bus, ADR-0005) are the next deliverables.
+**Status**: Phases 1 + 2 shipped — host opt-in, recorder UI, prepare
+endpoint, submit-side wiring. Phase 3 (admin playback synced to
+phoenix_replay's timeline event bus, ADR-0005) is the next deliverable.
 
-**Enabling Phase 1 today**:
+### Enabling
 
-1. Add `{:ash_storage, "~> 0.1"}` to your own `mix.exs`.
-2. Set `config :ash_feedback, audio_enabled: true` in `config.exs`
-   and recompile. Both flags must be set for the macro to extend
-   `Feedback` with `has_one_attached :audio_clip`.
-3. Define host-side `BlobResource` and `AttachmentResource` modules
-   (AshStorage's pattern). See
-   [`dev/resources/post.ex`](https://github.com/ash-project/ash_storage/blob/main/dev/resources/post.ex),
-   [`blob.ex`](https://github.com/ash-project/ash_storage/blob/main/dev/resources/blob.ex),
-   and
-   [`attachment.ex`](https://github.com/ash-project/ash_storage/blob/main/dev/resources/attachment.ex)
-   in the AshStorage repo for the canonical shapes until Phase 5f's
-   installer scaffolds them.
-4. Pass your `AttachmentResource` to the Feedback `use` call so
-   the `has_one_attached` declaration knows where to attach:
+```elixir
+# config/config.exs
+config :ash_feedback,
+  audio_enabled: true,
+  feedback_resource: MyApp.Feedback.Entry,
+  audio_attachment_resource: MyApp.Storage.Attachment,
+  audio_max_seconds: 300  # default
+```
 
-   ```elixir
-   defmodule MyApp.Feedback.Entry do
-     use AshFeedback.Resources.Feedback,
-       domain: MyApp.Feedback,
-       repo: MyApp.Repo,
-       audio_attachment_resource: MyApp.Storage.Attachment
-   end
-   ```
+### Host requirements
 
-5. Run `mix ash.codegen audio_attachment` to add the storage tables.
+- `{:ash_storage, github: "ash-project/ash_storage"}` in your deps
+  (pre-Hex; switch to `~> 0.1` once it cuts a Hex release).
+- Host-defined `Blob` + `Attachment` AshStorage resources. See
+  [`dev/resources/blob.ex`](https://github.com/ash-project/ash_storage/blob/main/dev/resources/blob.ex)
+  and
+  [`dev/resources/attachment.ex`](https://github.com/ash-project/ash_storage/blob/main/dev/resources/attachment.ex)
+  in the AshStorage repo for reference shapes (Phase 5f's installer
+  will scaffold these).
+- An AshStorage service configured for the Blob resource — `Disk`
+  for dev, `S3` (or compatible) for prod.
+
+### Pass the audio resources to the macro
+
+```elixir
+defmodule MyApp.Feedback.Entry do
+  use AshFeedback.Resources.Feedback,
+    otp_app: :my_app,
+    domain: MyApp.Feedback,
+    repo: MyApp.Repo,
+    audio_blob_resource: MyApp.Storage.Blob,
+    audio_attachment_resource: MyApp.Storage.Attachment
+end
+```
+
+`otp_app:` is required when audio is enabled so AshStorage's per-resource
+service config (`config :my_app, MyApp.Feedback.Entry, storage: [...]`)
+resolves at runtime. Audio-disabled hosts can leave it off.
+
+Run `mix ash.codegen audio_storage` to generate the migrations for the
+two storage tables.
+
+### Wiring the browser side
+
+In your root layout — load the recorder CSS in `<head>` and the
+recorder JS at the **end** of `<body>`, after the `phoenix_replay`
+widget element so the addon registers before `phoenix_replay`'s panel
+mounts:
+
+```heex
+<link rel="stylesheet" href={~p"/assets/ash_feedback/audio_recorder.css"} />
+...
+<PhoenixReplay.UI.Components.phoenix_replay_widget ... />
+<script defer src={~p"/assets/ash_feedback/audio_recorder.js"}></script>
+```
+
+Add a `Plug.Static` entry serving `ash_feedback/priv/static/assets`:
+
+```elixir
+plug Plug.Static,
+  at: "/assets/ash_feedback",
+  from: {:ash_feedback, "priv/static/assets"}
+```
+
+In your router, mount the prepare endpoint inside an authenticated
+browser scope:
+
+```elixir
+import AshFeedback.Router, only: [audio_routes: 0]
+
+scope "/" do
+  pipe_through :browser
+  audio_routes()  # or audio_routes(path: "/api/audio")
+end
+```
+
+### Browser support
+
+- Chrome / Firefox / Edge — `audio/webm; codecs=opus` (primary).
+- Safari — `audio/mp4; codecs=mp4a.40.2` (fallback).
+- No supported codec → mic button disabled with a tooltip; the rest
+  of the form remains usable.
+- Microphone permission denied → inline notice; the user can still
+  submit without audio.
 
 Audio behavior is opt-in at every layer — hosts who skip the config
 flag get the existing description-only feedback flow with zero
