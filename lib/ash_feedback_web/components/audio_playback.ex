@@ -17,9 +17,9 @@ defmodule AshFeedbackWeb.Components.AudioPlayback do
 
   use Phoenix.Component
 
-  attr(:audio_url, :string, default: nil)
-  attr(:audio_start_offset_ms, :integer, default: 0)
-  attr(:session_id, :string, required: true)
+  attr :audio_url, :string, default: nil
+  attr :audio_start_offset_ms, :integer, default: 0
+  attr :session_id, :string, required: true
 
   def audio_playback(%{audio_url: nil} = assigns), do: ~H""
 
