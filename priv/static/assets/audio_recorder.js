@@ -47,6 +47,7 @@
     return {
       id: "audio",
       slot: "form-top",
+      modes: ["on_demand"], // Path B only — see ash_feedback ADR-0001 + phoenix_replay 2026-04-25 mode-aware-panel-addons spec
       mount: function (ctx) {
         var codec = pickCodec();
         var preparePath =
@@ -87,7 +88,7 @@
             unsup.className = "phx-replay-audio-mic";
             unsup.disabled = true;
             unsup.title = "Audio recording not supported in this browser";
-            unsup.textContent = "🎙 Voice note (unsupported)";
+            unsup.textContent = "🎙 Voice commentary (unsupported)";
             wrapper.appendChild(unsup);
             return;
           }
@@ -105,7 +106,7 @@
             var btn = document.createElement("button");
             btn.type = "button";
             btn.className = "phx-replay-audio-mic";
-            btn.textContent = "🎙 Record voice note";
+            btn.textContent = "🎙 Add voice commentary";
             btn.addEventListener("click", function () {
               startRecording();
             });
