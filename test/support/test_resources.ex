@@ -6,6 +6,7 @@ defmodule AshFeedback.Test.StorageDomain do
     resource AshFeedback.Test.StorageBlob
     resource AshFeedback.Test.StorageAttachment
     resource AshFeedback.Test.StorageFeedback
+    resource AshFeedback.Test.DiskFeedback
     resource AshFeedback.Test.AudioFeedback
   end
 end
@@ -107,6 +108,42 @@ defmodule AshFeedback.Test.StorageFeedback do
 
     has_one_attached :audio_clip,
       service: {AshStorage.Service.Test, []}
+  end
+
+  attributes do
+    uuid_primary_key :id
+  end
+
+  actions do
+    defaults [:read, :destroy, create: :*]
+  end
+end
+
+defmodule AshFeedback.Test.DiskFeedback do
+  @moduledoc """
+  Disk-backed audio fixture used by tests that need URL minting to embed
+  TTL-sensitive content (signed URLs). The Test service ignores
+  `:expires_in`, so it cannot be used to verify TTL wire-through.
+
+  `:base_url` and `:secret` enable signed-URL mode in
+  `AshStorage.Service.Disk.url/2` — different `:expires_in` values produce
+  different `expires_at` timestamps and therefore different HMAC tokens.
+  """
+  use Ash.Resource,
+    domain: AshFeedback.Test.StorageDomain,
+    data_layer: Ash.DataLayer.Ets,
+    extensions: [AshStorage]
+
+  storage do
+    blob_resource AshFeedback.Test.StorageBlob
+    attachment_resource AshFeedback.Test.StorageAttachment
+
+    has_one_attached :audio_clip,
+      service:
+        {AshStorage.Service.Disk,
+         root: "/tmp/ash_feedback_test_disk",
+         base_url: "http://test.local/disk",
+         secret: "test-secret-for-ttl-tests"}
   end
 
   attributes do

@@ -55,22 +55,51 @@ defmodule AshFeedback.Controller.AudioDownloadsController do
     blob_resource = StorageInfo.storage_blob_resource!(feedback_resource)
 
     case Ash.get(blob_resource, blob_id, load: [:parsed_service_opts]) do
-      {:ok, blob} -> {:ok, blob}
-      {:error, _} -> :error
+      {:ok, blob} ->
+        {:ok, blob}
+
+      {:error, %Ash.Error.Invalid{} = error} ->
+        # Ash wraps both "row not found" and "malformed primary key"
+        # under the same Invalid class; both are client-input problems
+        # that should surface as a silent 404. Anything else (config,
+        # data layer, auth) gets a warning log before being translated.
+        cond do
+          wraps?(error, Ash.Error.Query.NotFound) -> :error
+          wraps?(error, Ash.Error.Invalid.InvalidPrimaryKey) -> :error
+          true -> log_and_error(error)
+        end
+
+      {:error, other} ->
+        log_and_error(other)
     end
   end
 
+  defp wraps?(%Ash.Error.Invalid{errors: errors}, error_module) do
+    Enum.any?(errors, &is_struct(&1, error_module))
+  end
+
+  defp log_and_error(error) do
+    require Logger
+    Logger.warning("AudioDownloadsController fetch_blob failed: #{inspect(error)}")
+    :error
+  end
+
   defp signed_url_for(blob, opts) do
+    ttl = Keyword.fetch!(opts, :ttl)
     feedback_resource = Config.feedback_resource!()
     {:ok, attachment} = StorageInfo.attachment(feedback_resource, :audio_clip)
 
     {:ok, {service_mod, base_service_opts}} =
       StorageInfo.service_for_attachment(feedback_resource, attachment)
 
+    # Merge order: service-level base opts first, then per-blob persisted
+    # opts, then our TTL on top. Diverges from
+    # AshStorage.Operations.build_blob_context/2 which assumes
+    # parsed_service_opts already contains everything; we layer for safety.
     service_opts =
       base_service_opts
       |> Keyword.merge(blob.parsed_service_opts || [])
-      |> Keyword.put(:expires_in, opts[:ttl])
+      |> Keyword.put(:expires_in, ttl)
 
     ctx = Context.new(service_opts, resource: feedback_resource, attachment: attachment)
     service_mod.url(blob.key, ctx)
