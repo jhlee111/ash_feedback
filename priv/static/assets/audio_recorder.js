@@ -39,7 +39,6 @@
   // read by review-media mount and form-top beforeSubmit.
   var audioState = {
     blob: null,
-    offsetMs: null,
     mimeType: null,
     ext: null,
   };
@@ -66,7 +65,6 @@
 
   function clearAudioState() {
     audioState.blob = null;
-    audioState.offsetMs = null;
     audioState.mimeType = null;
     audioState.ext = null;
   }
@@ -176,7 +174,6 @@
             audioState.blob = new Blob(chunks, { type: codec.mime });
             audioState.mimeType = codec.mime;
             audioState.ext = codec.ext;
-            // offsetMs was captured at start; preserve unless null.
             if (mediaStream) {
               mediaStream.getTracks().forEach(function (t) {
                 t.stop();
@@ -190,13 +187,6 @@
           recorder.start();
 
           startedAtMs = Date.now();
-          var sessionStarted =
-            typeof ctx.sessionStartedAtMs === "function"
-              ? ctx.sessionStartedAtMs()
-              : null;
-          audioState.offsetMs = sessionStarted
-            ? Math.max(0, startedAtMs - sessionStarted)
-            : 0;
 
           state = "recording";
           render();
@@ -318,13 +308,6 @@
         content_type: audioState.mimeType,
         byte_size: audioState.blob.size,
       };
-
-      // D2-revised (Phase 2): offset rides on blob metadata at prepare
-      // time. The submit-side wire format only carries the blob id
-      // under `extras`.
-      if (typeof audioState.offsetMs === "number") {
-        prepareBody.metadata = { audio_start_offset_ms: audioState.offsetMs };
-      }
 
       var capturedMime = audioState.mimeType;
       var capturedBlob = audioState.blob;
