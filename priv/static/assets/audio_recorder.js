@@ -291,7 +291,100 @@
   }
 
   // ---- form-top addon (Task 4) --------------------------------------
-  // mountFormTop(ctx) — placeholder, lands in Task 4.
+  // Mounts ONCE at panel construction (form-top is panel-scoped).
+  // Renders nothing visible — its only job is to register the
+  // beforeSubmit hook that runs at Send time.
+  //
+  // beforeSubmit reads audioState.blob (populated by Task 2's
+  // pill-action mount) and runs the existing prepare → PUT/POST →
+  // blob_id flow against the AshStorage upload endpoint. On success,
+  // the singleton is cleared so the next Path B session starts fresh.
+  // When audioState.blob is null (Path A submit, Path B without mic),
+  // beforeSubmit returns {} — zero network, zero extras.
+  function mountFormTop(ctx) {
+    var preparePath =
+      (ctx.slotEl && ctx.slotEl.getAttribute(PREPARE_PATH_ATTR)) ||
+      DEFAULT_PREPARE_PATH;
+
+    function beforeSubmit(_args) {
+      if (!audioState.blob) return Promise.resolve({});
+
+      var headers = { "content-type": "application/json" };
+      var token = csrfToken();
+      if (token) headers["x-csrf-token"] = token;
+
+      var prepareBody = {
+        filename: "voice-note." + audioState.ext,
+        content_type: audioState.mimeType,
+        byte_size: audioState.blob.size,
+      };
+
+      // D2-revised (Phase 2): offset rides on blob metadata at prepare
+      // time. The submit-side wire format only carries the blob id
+      // under `extras`.
+      if (typeof audioState.offsetMs === "number") {
+        prepareBody.metadata = { audio_start_offset_ms: audioState.offsetMs };
+      }
+
+      var capturedMime = audioState.mimeType;
+      var capturedBlob = audioState.blob;
+
+      return fetch(preparePath, {
+        method: "POST",
+        credentials: "same-origin",
+        headers: headers,
+        body: JSON.stringify(prepareBody),
+      })
+        .then(function (res) {
+          if (!res.ok) {
+            throw new Error("Audio prepare failed: HTTP " + res.status);
+          }
+          return res.json();
+        })
+        .then(function (info) {
+          var url = info.url;
+          var method = (info.method || "put").toLowerCase();
+
+          if (method === "post") {
+            var fd = new FormData();
+            Object.keys(info.fields || {}).forEach(function (k) {
+              fd.append(k, info.fields[k]);
+            });
+            fd.append("file", capturedBlob);
+            return fetch(url, { method: "POST", body: fd }).then(
+              function (up) {
+                if (!up.ok) {
+                  throw new Error("Audio upload failed: HTTP " + up.status);
+                }
+                return info.blob_id;
+              }
+            );
+          }
+
+          return fetch(url, {
+            method: "PUT",
+            body: capturedBlob,
+            headers: { "content-type": capturedMime },
+          }).then(function (up) {
+            if (!up.ok) {
+              throw new Error("Audio upload failed: HTTP " + up.status);
+            }
+            return info.blob_id;
+          });
+        })
+        .then(function (blobId) {
+          // Clear singleton after successful upload — next Path B
+          // session starts fresh.
+          clearAudioState();
+          return { extras: { audio_clip_blob_id: blobId } };
+        });
+    }
+
+    // Legacy return shape — phoenix_replay's panel orchestrator pushes
+    // {beforeSubmit} entries into addonHooks for the form-submit path.
+    // No DOM render needed; form-top stays empty.
+    return { beforeSubmit: beforeSubmit };
+  }
 
   function tryRegister() {
     if (
@@ -310,7 +403,12 @@
         paths: ["record_and_report"],
         mount: mountReviewMedia,
       });
-      // form-top registration lands in Task 4.
+      window.PhoenixReplay.registerPanelAddon({
+        id: "ash-feedback-audio-submit",
+        slot: "form-top",
+        paths: ["record_and_report"],
+        mount: mountFormTop,
+      });
       return true;
     }
     return false;
