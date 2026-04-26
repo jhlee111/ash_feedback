@@ -1,15 +1,27 @@
-// ash_feedback audio recorder — phoenix_replay panel addon.
+// ash_feedback audio recorder — phoenix_replay panel addon (Phase 3+).
 //
-// Self-registers via window.PhoenixReplay.registerPanelAddon once the
-// PhoenixReplay namespace is on the page. Captures audio via
-// MediaRecorder, uploads to AshStorage via the prepare endpoint + a
-// presigned PUT (or POST), and returns { audio_clip_blob_id } via
-// beforeSubmit.
+// Three addon registrations share module-scope state via the singleton
+// pattern below. Lifecycle:
+//   1. Path B starts → pill-action mount runs → clears singleton state
+//      → renders the mic toggle inside the recording pill.
+//   2. User clicks mic → MediaRecorder captures audio. Click again to
+//      stop. The captured blob + start-offset are written into the
+//      singleton.
+//   3. Path B stops → pill-action UNMOUNTS (cleanup releases
+//      MediaRecorder + stream; blob STAYS in singleton).
+//   4. REVIEW screen opens → review-media mount renders an <audio>
+//      preview from the singleton blob (or nothing if empty).
+//   5. User clicks Continue OR Re-record → review-media unmounts
+//      (cleanup revokes the blob URL; blob STAYS in singleton).
+//   6. Re-record → pill-action remounts → CLEARS singleton → fresh
+//      recording (the previous blob is dropped).
+//   7. Continue → describe step opens → Send → form-top's
+//      beforeSubmit reads the singleton, uploads, clears.
 //
-// D2-revised: the narration start offset (audio_start_offset_ms) rides
-// on the AshStorage Blob row's metadata map at prepare time — the
-// recorder includes it in the prepare POST body's `metadata` field. The
-// beforeSubmit return only carries the blob id under `extras`.
+// Path A widgets: pill-action and review-media never mount (paths
+// filter excludes :report_now). form-top mounts but its beforeSubmit
+// reads the empty singleton and returns {} (no audio extras).
+
 (function () {
   "use strict";
 
@@ -22,6 +34,15 @@
     { mime: "audio/webm; codecs=opus", ext: "webm" },
     { mime: "audio/mp4; codecs=mp4a.40.2", ext: "mp4" },
   ];
+
+  // Module-scope state singleton. Owned by the pill-action mount;
+  // read by review-media mount and form-top beforeSubmit.
+  var audioState = {
+    blob: null,
+    offsetMs: null,
+    mimeType: null,
+    ext: null,
+  };
 
   function pickCodec() {
     if (typeof MediaRecorder === "undefined") return null;
@@ -43,297 +64,30 @@
     return el ? el.getAttribute("content") : null;
   }
 
-  function buildAddon() {
-    return {
-      id: "audio",
-      slot: "form-top",
-      modes: ["on_demand"], // Path B only — see ash_feedback ADR-0001 + phoenix_replay 2026-04-25 mode-aware-panel-addons spec
-      mount: function (ctx) {
-        var codec = pickCodec();
-        var preparePath =
-          (ctx.slotEl && ctx.slotEl.getAttribute(PREPARE_PATH_ATTR)) ||
-          DEFAULT_PREPARE_PATH;
-        var maxSecondsAttr =
-          ctx.slotEl && ctx.slotEl.getAttribute(MAX_SECONDS_ATTR);
-        var maxSeconds = parseInt(maxSecondsAttr || DEFAULT_MAX_SECONDS, 10);
-
-        // State: "idle" | "recording" | "done" | "denied" | "unsupported"
-        var state = codec ? "idle" : "unsupported";
-        var mediaStream = null;
-        var recorder = null;
-        var chunks = [];
-        var blob = null;
-        var startedAtMs = null;
-        var offsetMs = null;
-        var timerHandle = null;
-        var previewUrl = null;
-
-        var wrapper = document.createElement("div");
-        wrapper.className = "phx-replay-audio-addon";
-        ctx.slotEl.appendChild(wrapper);
-
-        function clearPreview() {
-          if (previewUrl) {
-            URL.revokeObjectURL(previewUrl);
-            previewUrl = null;
-          }
-        }
-
-        function render() {
-          wrapper.innerHTML = "";
-
-          if (state === "unsupported") {
-            var unsup = document.createElement("button");
-            unsup.type = "button";
-            unsup.className = "phx-replay-audio-mic";
-            unsup.disabled = true;
-            unsup.title = "Audio recording not supported in this browser";
-            unsup.textContent = "🎙 Voice commentary (unsupported)";
-            wrapper.appendChild(unsup);
-            return;
-          }
-
-          if (state === "denied") {
-            var notice = document.createElement("div");
-            notice.className = "phx-replay-audio-notice";
-            notice.textContent =
-              "Microphone permission denied. You can still submit without audio.";
-            wrapper.appendChild(notice);
-            return;
-          }
-
-          if (state === "idle") {
-            var btn = document.createElement("button");
-            btn.type = "button";
-            btn.className = "phx-replay-audio-mic";
-            btn.textContent = "🎙 Add voice commentary";
-            btn.addEventListener("click", function () {
-              startRecording();
-            });
-            wrapper.appendChild(btn);
-            return;
-          }
-
-          if (state === "recording") {
-            var elapsed = Date.now() - startedAtMs;
-            var remainingMs = maxSeconds * 1000 - elapsed;
-            var stop = document.createElement("button");
-            stop.type = "button";
-            stop.className = "phx-replay-audio-stop";
-            stop.textContent = "■ Stop · " + fmtDuration(elapsed);
-            stop.addEventListener("click", function () {
-              stopRecording();
-            });
-            wrapper.appendChild(stop);
-
-            if (remainingMs <= 30000) {
-              var warn = document.createElement("span");
-              warn.className = "phx-replay-audio-warn";
-              warn.textContent =
-                " · " + Math.max(0, Math.ceil(remainingMs / 1000)) + "s left";
-              wrapper.appendChild(warn);
-            }
-            return;
-          }
-
-          if (state === "done") {
-            clearPreview();
-            previewUrl = URL.createObjectURL(blob);
-
-            var audio = document.createElement("audio");
-            audio.controls = true;
-            audio.src = previewUrl;
-            audio.className = "phx-replay-audio-preview";
-            wrapper.appendChild(audio);
-
-            var rerec = document.createElement("button");
-            rerec.type = "button";
-            rerec.className = "phx-replay-audio-rerecord";
-            rerec.textContent = "✕ Re-record";
-            rerec.addEventListener("click", function () {
-              clearPreview();
-              blob = null;
-              startedAtMs = null;
-              offsetMs = null;
-              state = "idle";
-              render();
-            });
-            wrapper.appendChild(rerec);
-            return;
-          }
-        }
-
-        function tick() {
-          if (state !== "recording") return;
-          var elapsed = Date.now() - startedAtMs;
-          if (elapsed >= maxSeconds * 1000) {
-            stopRecording();
-            return;
-          }
-          render();
-          timerHandle = window.setTimeout(tick, 250);
-        }
-
-        function startRecording() {
-          if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-            state = "unsupported";
-            render();
-            return;
-          }
-
-          navigator.mediaDevices
-            .getUserMedia({ audio: true })
-            .then(function (stream) {
-              mediaStream = stream;
-              chunks = [];
-
-              recorder = new MediaRecorder(mediaStream, { mimeType: codec.mime });
-              recorder.ondataavailable = function (e) {
-                if (e.data && e.data.size > 0) chunks.push(e.data);
-              };
-              recorder.onstop = function () {
-                blob = new Blob(chunks, { type: codec.mime });
-                if (mediaStream) {
-                  mediaStream.getTracks().forEach(function (t) {
-                    t.stop();
-                  });
-                }
-                mediaStream = null;
-                state = "done";
-                render();
-              };
-              recorder.start();
-
-              startedAtMs = Date.now();
-              var sessionStarted =
-                typeof ctx.sessionStartedAtMs === "function"
-                  ? ctx.sessionStartedAtMs()
-                  : null;
-              offsetMs = sessionStarted
-                ? Math.max(0, startedAtMs - sessionStarted)
-                : 0;
-
-              state = "recording";
-              render();
-              tick();
-            })
-            .catch(function () {
-              state = "denied";
-              render();
-            });
-        }
-
-        function stopRecording() {
-          if (timerHandle) {
-            window.clearTimeout(timerHandle);
-            timerHandle = null;
-          }
-          if (recorder && recorder.state !== "inactive") {
-            recorder.stop();
-          }
-        }
-
-        if (typeof ctx.onPanelClose === "function") {
-          ctx.onPanelClose(function () {
-            if (mediaStream) {
-              mediaStream.getTracks().forEach(function (t) {
-                t.stop();
-              });
-            }
-            if (timerHandle) window.clearTimeout(timerHandle);
-            clearPreview();
-            mediaStream = null;
-            recorder = null;
-            chunks = [];
-            blob = null;
-            startedAtMs = null;
-            offsetMs = null;
-            state = codec ? "idle" : "unsupported";
-          });
-        }
-
-        function beforeSubmit(_args) {
-          if (state !== "done" || !blob) return Promise.resolve({});
-
-          var headers = { "content-type": "application/json" };
-          var token = csrfToken();
-          if (token) headers["x-csrf-token"] = token;
-
-          var prepareBody = {
-            filename: "voice-note." + codec.ext,
-            content_type: codec.mime,
-            byte_size: blob.size,
-          };
-
-          // D2-revised: offset persists on the blob's metadata at
-          // prepare time. The submit-side wire format only carries the
-          // blob id under `extras`.
-          if (typeof offsetMs === "number") {
-            prepareBody.metadata = { audio_start_offset_ms: offsetMs };
-          }
-
-          return fetch(preparePath, {
-            method: "POST",
-            credentials: "same-origin",
-            headers: headers,
-            body: JSON.stringify(prepareBody),
-          })
-            .then(function (res) {
-              if (!res.ok) {
-                throw new Error("Audio prepare failed: HTTP " + res.status);
-              }
-              return res.json();
-            })
-            .then(function (info) {
-              var url = info.url;
-              var method = (info.method || "put").toLowerCase();
-
-              if (method === "post") {
-                var fd = new FormData();
-                Object.keys(info.fields || {}).forEach(function (k) {
-                  fd.append(k, info.fields[k]);
-                });
-                fd.append("file", blob);
-                return fetch(url, { method: "POST", body: fd }).then(
-                  function (up) {
-                    if (!up.ok) {
-                      throw new Error(
-                        "Audio upload failed: HTTP " + up.status
-                      );
-                    }
-                    return info.blob_id;
-                  }
-                );
-              }
-
-              return fetch(url, {
-                method: "PUT",
-                body: blob,
-                headers: { "content-type": codec.mime },
-              }).then(function (up) {
-                if (!up.ok) {
-                  throw new Error("Audio upload failed: HTTP " + up.status);
-                }
-                return info.blob_id;
-              });
-            })
-            .then(function (blobId) {
-              return { extras: { audio_clip_blob_id: blobId } };
-            });
-        }
-
-        render();
-        return { beforeSubmit: beforeSubmit };
-      },
-    };
+  function clearAudioState() {
+    audioState.blob = null;
+    audioState.offsetMs = null;
+    audioState.mimeType = null;
+    audioState.ext = null;
   }
+
+  // ---- pill-action addon (Task 2) -----------------------------------
+  // mountPillAction(ctx) — placeholder, lands in Task 2.
+
+  // ---- review-media addon (Task 3) ----------------------------------
+  // mountReviewMedia(ctx) — placeholder, lands in Task 3.
+
+  // ---- form-top addon (Task 4) --------------------------------------
+  // mountFormTop(ctx) — placeholder, lands in Task 4.
 
   function tryRegister() {
     if (
       window.PhoenixReplay &&
       typeof window.PhoenixReplay.registerPanelAddon === "function"
     ) {
-      window.PhoenixReplay.registerPanelAddon(buildAddon());
+      // Three registrations land in Tasks 2-4. Until then the file
+      // compiles and registers nothing — this is intentional during
+      // the migration's intermediate state.
       return true;
     }
     return false;
