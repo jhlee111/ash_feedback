@@ -1,6 +1,6 @@
 # Plan: Audio Narration via AshStorage
 
-**Status**: Active — Phases 1 + 2 + 3 shipped (Phase 3 wraps 2026-04-25). Phase 4 (docs/integration guide) pending.
+**Status**: Shipped — Phases 1 + 2 + 3 + 4 complete (2026-04-24..2026-04-26).
 **Drafted**: 2026-04-24
 **Promoted**: 2026-04-24 (ADR-0001 Accepted)
 **ADR**: [0001-audio-narration-via-ash-storage](../../decisions/0001-audio-narration-via-ash-storage.md)
@@ -214,9 +214,8 @@ Safari smoke deferred to a separate verification pass.
       pointing at `docs/guides/audio-narration.md` (305 lines covering
       Path A/B framework, full setup, recording side, admin playback,
       sync rules, decisions log). Shipped in `40b08d8` (2026-04-25).
-- [ ] CHANGELOG roll-up entry covering all four phases. Per-phase entries
-      already landed; a roll-up section that consolidates them is the
-      remaining work.
+- [x] CHANGELOG roll-up entry covering all four phases. Shipped in this
+      commit alongside the plan filing.
 
 ## Risks & rollback
 
