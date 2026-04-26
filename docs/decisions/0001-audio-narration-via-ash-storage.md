@@ -1,6 +1,15 @@
 # ADR-0001: Audio Narration via AshStorage
 
-**Status**: Accepted
+**Status**: Accepted — Question D **superseded** 2026-04-26 by the
+audio pre-flight toggle redesign
+([spec](../superpowers/specs/2026-04-26-audio-pre-flight-toggle-design.md)).
+Audio is now session-equivalent (recording starts at the rrweb
+session boundary), so offset is always 0. The
+`audio_start_offset_ms` metadata key has been dropped end-to-end:
+JS prepare body, `AudioUploadsController`, `AshFeedback.Storage`,
+and admin playback no longer reference it; AshStorage Blob
+`metadata` JSON no longer carries it for new uploads. Questions A,
+B, C, E remain in force.
 **Date**: 2026-04-24
 **Depends on**: phoenix_replay ADR-0005 (Replay Player Timeline
 Event Bus)
