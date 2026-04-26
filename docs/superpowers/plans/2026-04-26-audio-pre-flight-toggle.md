@@ -1,6 +1,19 @@
 # Audio Pre-Flight Toggle Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **Status: Shipped 2026-04-26.** Manual smoke verified end-to-end with a real microphone (voice recorded → review modal mini-player → audio plays in sync via timeline bus). All three phases landed; plan is complete.
+>
+> **Shipped commits**
+> - phoenix_replay: `8cf7f2f` (Phase 1 push) → `08ef04f` (choose-record routing fix) → `2074a12` (timeline-bus extraction) → `50b6096` (HTML error summarization).
+> - ash_feedback: `54a3572` (Phase 2 push) → `ba3ed44` (variant B switch UI) → `1794a56` (review-media timeline subscription).
+> - ash_feedback_demo: `b7d260a` → `b10dfdd` → `c67cf91` (dep bumps + audio_default + admin offset cleanup + IA collapse to 2 pages).
+>
+> **Deviations from the plan worth noting:**
+> - Task 12 (column drop migration) was a no-op: `audio_start_offset_ms` lived as a JSONB metadata key inside AshStorage Blob, not a Feedback resource attribute. Removing it from the prepare/storage pipeline was the actual "schema removal".
+> - Task 14 added a Variant B switch UI (per a separate UI-variant brainstorm) on top of the simpler checkbox the plan called for.
+> - Plan didn't mention demo IA collapse — the (continuous, on_demand) tuple legacy labels were removed in a follow-up: `/demo/continuous` + `/demo/on-demand-*` → `/demo/float` + `/demo/headless`.
+> - Plan didn't anticipate timeline-bus extraction. After C-step audio sync work, the bus moved from `player_hook.js` (admin-only) into `phoenix_replay.js` so the panel mini-player can publish on the same channel.
+
+> **For agentic workers (historical):** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Replace the mid-flight mic toggle with a pre-flight voice checkbox so audio recording is locked to the exact rrweb session window; drop `audio_start_offset_ms` end-to-end.
 
