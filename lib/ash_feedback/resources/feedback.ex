@@ -438,26 +438,7 @@ defmodule AshFeedback.Resources.Feedback do
             end
           )
 
-          change fn changeset, _ctx ->
-            meta = Ash.Changeset.get_attribute(changeset, :metadata) || %{}
-
-            case Map.get(meta, "environment") || Map.get(meta, :environment) do
-              value when is_binary(value) and byte_size(value) > 0 ->
-                case AshFeedback.Types.Environment.cast_input(value, []) do
-                  {:ok, env_atom} ->
-                    Ash.Changeset.force_change_attribute(changeset, :reported_on_env, env_atom)
-
-                  _ ->
-                    changeset
-                end
-
-              value when is_atom(value) and not is_nil(value) ->
-                Ash.Changeset.force_change_attribute(changeset, :reported_on_env, value)
-
-              _ ->
-                changeset
-            end
-          end
+          change AshFeedback.Changes.CoerceReportedOnEnv
         end
 
         read :list do
@@ -512,33 +493,36 @@ defmodule AshFeedback.Resources.Feedback do
         end
 
         update :acknowledge do
-          require_atomic? false
           change transition_state(:acknowledged)
         end
 
         update :assign do
-          require_atomic? false
           accept [:assignee_id]
           change transition_state(:in_progress)
         end
 
         update :verify do
+          # Non-atomic: RequireAtLeastOnePrUrl only implements `validate/3`.
+          # Adding `atomic/3` would require an Ash.Expr fragment checking
+          # `array_length(pr_urls, 1) >= 1` plus a typed error tuple —
+          # tracked as a follow-up if/when this action runs in bulk.
           require_atomic? false
           accept [:pr_urls, :verified_by_id]
           argument :note, :string, allow_nil?: true
 
-          validate fn changeset, _ctx ->
-            case Ash.Changeset.get_attribute(changeset, :pr_urls) do
-              [_ | _] -> :ok
-              _ -> {:error, field: :pr_urls, message: "at least one PR URL required"}
-            end
-          end
+          validate AshFeedback.Validations.RequireAtLeastOnePrUrl
 
           change set_attribute(:verified_at, &DateTime.utc_now/0)
           change transition_state(:verified_on_preview)
         end
 
         update :resolve do
+          # Non-atomic: invoked in a per-row loop by
+          # :promote_verified_to_resolved. AshPostgres can't translate
+          # AshStateMachine's atomic-mode
+          # `error(NoMatchingTransition, ...)` expression to SQL, so
+          # atomic validation fails in that path. Acceptable — promote
+          # runs once per deploy.
           require_atomic? false
           accept [:resolved_by_id]
           change set_attribute(:resolved_at, &DateTime.utc_now/0)
@@ -546,7 +530,6 @@ defmodule AshFeedback.Resources.Feedback do
         end
 
         update :dismiss do
-          require_atomic? false
           argument :reason, AshFeedback.Types.DismissReason, allow_nil?: false
 
           change set_attribute(:dismissed_reason, arg(:reason))

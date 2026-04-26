@@ -117,28 +117,7 @@ defmodule AshFeedback.Resources.FeedbackComment do
         create :create do
           accept [:feedback_id, :author_id, :body]
 
-          change before_action(fn changeset, _ctx ->
-                   fid = Ash.Changeset.get_attribute(changeset, :feedback_id)
-
-                   case Ash.get(unquote(feedback_resource), fid, authorize?: false) do
-                     {:ok, %{status: status}} when status in [:resolved, :dismissed] ->
-                       Ash.Changeset.add_error(
-                         changeset,
-                         field: :feedback_id,
-                         message: "cannot comment on a #{status} feedback"
-                       )
-
-                     {:ok, _} ->
-                       changeset
-
-                     {:error, _} ->
-                       Ash.Changeset.add_error(
-                         changeset,
-                         field: :feedback_id,
-                         message: "not found"
-                       )
-                   end
-                 end)
+          change {AshFeedback.Changes.ValidateParentFeedback, resource: unquote(feedback_resource)}
         end
 
         read :list_by_feedback do
