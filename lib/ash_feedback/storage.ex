@@ -63,7 +63,11 @@ defmodule AshFeedback.Storage do
     attrs = %{
       session_id: session_id,
       description: Map.get(params, "description"),
-      severity: coerce_severity(Map.get(params, "severity")),
+      # `severity:` passes through raw; `AshFeedback.Types.Severity` is
+      # an `Ash.Type.Enum`, so Ash's changeset cast translates strings
+      # ("high"), atoms (:high), and surfaces invalid values as
+      # changeset errors rather than swallowing them as nil.
+      severity: Map.get(params, "severity"),
       metadata: Map.get(params, "metadata") || %{},
       identity: coerce_identity(identity)
     }
@@ -171,17 +175,12 @@ defmodule AshFeedback.Storage do
     end
   end
 
-  defp coerce_severity(nil), do: nil
-
-  defp coerce_severity(value) when is_atom(value), do: value
-
-  defp coerce_severity(value) when is_binary(value) do
-    case AshFeedback.Types.Severity.cast_input(value, []) do
-      {:ok, atom} -> atom
-      _ -> nil
-    end
-  end
-
+  # Translates the Phoenix.Replay identity convention (atom-keyed map
+  # with `:kind`/`:id`/`:attrs`) into a JSONB-friendly string-keyed map
+  # for the `:identity` attribute. Stays in Storage rather than promoting
+  # to an Ash type because the contract is transport-layer (the identity
+  # struct's shape is owned by `PhoenixReplay.Plug.Identify`, not us);
+  # an embedded resource would force the host to know our shape.
   defp coerce_identity(%{kind: kind} = identity) do
     %{
       "kind" => to_string(kind),
