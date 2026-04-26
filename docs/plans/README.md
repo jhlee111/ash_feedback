@@ -12,7 +12,7 @@ re-filed.
 | # | Phase | Status | File |
 |---|-------|--------|------|
 | —  | Audio narration via AshStorage (ADR-0001) | Phases 1 + 2 + 3 shipped (2026-04-25); Phase 4 (docs/integration guide) pending | [active/2026-04-24-audio-narration.md](active/2026-04-24-audio-narration.md) |
-| —  | Audio addon — pill + review slot relocation | Spec drafted 2026-04-25 — depends on phoenix_replay ADR-0006 acceptance + Phase 3 of unified entry spec | [`docs/superpowers/specs/2026-04-25-audio-addon-pill-relocation-design.md`](../superpowers/specs/2026-04-25-audio-addon-pill-relocation-design.md) |
+| —  | Audio addon — pill + review slot relocation | phoenix_replay Phase 3 shipped 2026-04-25; ash_feedback companion plan ready | [spec](../superpowers/specs/2026-04-25-audio-addon-pill-relocation-design.md) / [plan](../superpowers/plans/2026-04-25-audio-addon-pill-relocation.md) |
 | 5e | Slack + GitHub Issues adapter stubs | proposed | [5e-integration-adapters.md](5e-integration-adapters.md) |
 | 5f | Igniter installer (`mix ash_feedback.install`) | proposed | [5f-igniter-installer.md](5f-igniter-installer.md) |
 | 5g | `AshFeedback.UI.AdminLive` (Cinder drop-in) | proposed, gated | [5g-admin-live.md](5g-admin-live.md) |
