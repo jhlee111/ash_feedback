@@ -72,7 +72,179 @@
   }
 
   // ---- pill-action addon (Task 2) -----------------------------------
-  // mountPillAction(ctx) — placeholder, lands in Task 2.
+  // Renders the mic toggle inside the recording pill while a Path B
+  // session is :active. Owns the audioState singleton lifecycle:
+  //   - mount: clear state (each fresh :active = fresh recording slot).
+  //   - mic toggle on/off: capture audio via MediaRecorder, write blob
+  //     into singleton on stop.
+  //   - cleanup: release MediaRecorder + stream + timer, but PRESERVE
+  //     audioState.blob so review-media can preview it.
+  function mountPillAction(ctx) {
+    var codec = pickCodec();
+
+    // Clear the singleton — each pill-action mount = fresh active
+    // session = the previous blob (if any) is stale.
+    clearAudioState();
+
+    // Per-mount state; the closure-captured cleanup stops these on
+    // pill unmount (Stop, panel close, Re-record).
+    var state = codec ? "idle" : "unsupported";
+    var mediaStream = null;
+    var recorder = null;
+    var chunks = [];
+    var startedAtMs = null;
+    var timerHandle = null;
+
+    var wrapper = document.createElement("div");
+    wrapper.className = "phx-replay-audio-pill-action";
+    ctx.slotEl.appendChild(wrapper);
+
+    function render() {
+      wrapper.innerHTML = "";
+
+      if (state === "unsupported") {
+        var unsup = document.createElement("button");
+        unsup.type = "button";
+        unsup.className = "phx-replay-audio-pill-mic";
+        unsup.disabled = true;
+        unsup.title = "Audio recording not supported in this browser";
+        unsup.textContent = "🎙";
+        wrapper.appendChild(unsup);
+        return;
+      }
+
+      if (state === "denied") {
+        var notice = document.createElement("span");
+        notice.className = "phx-replay-audio-notice";
+        notice.textContent = "Mic blocked";
+        wrapper.appendChild(notice);
+        return;
+      }
+
+      if (state === "idle") {
+        var btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "phx-replay-audio-pill-mic";
+        btn.title = "Add voice commentary";
+        btn.textContent = audioState.blob ? "🎙✓" : "🎙";
+        btn.addEventListener("click", function () {
+          startRecording();
+        });
+        wrapper.appendChild(btn);
+        return;
+      }
+
+      if (state === "recording") {
+        var elapsed = Date.now() - startedAtMs;
+        var stop = document.createElement("button");
+        stop.type = "button";
+        stop.className = "phx-replay-audio-pill-stop-mic";
+        stop.textContent = "■ " + fmtDuration(elapsed);
+        stop.addEventListener("click", function () {
+          stopRecording();
+        });
+        wrapper.appendChild(stop);
+        return;
+      }
+    }
+
+    function tick() {
+      if (state !== "recording") return;
+      render();
+      timerHandle = window.setTimeout(tick, 250);
+    }
+
+    function startRecording() {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        state = "unsupported";
+        render();
+        return;
+      }
+
+      navigator.mediaDevices
+        .getUserMedia({ audio: true })
+        .then(function (stream) {
+          mediaStream = stream;
+          chunks = [];
+
+          recorder = new MediaRecorder(mediaStream, { mimeType: codec.mime });
+          recorder.ondataavailable = function (e) {
+            if (e.data && e.data.size > 0) chunks.push(e.data);
+          };
+          recorder.onstop = function () {
+            // Write blob into the module singleton.
+            audioState.blob = new Blob(chunks, { type: codec.mime });
+            audioState.mimeType = codec.mime;
+            audioState.ext = codec.ext;
+            // offsetMs was captured at start; preserve unless null.
+            if (mediaStream) {
+              mediaStream.getTracks().forEach(function (t) {
+                t.stop();
+              });
+            }
+            mediaStream = null;
+            state = "idle";  // back to idle so the user can re-record
+                              // within this :active session if they want.
+            render();
+          };
+          recorder.start();
+
+          startedAtMs = Date.now();
+          var sessionStarted =
+            typeof ctx.sessionStartedAtMs === "function"
+              ? ctx.sessionStartedAtMs()
+              : null;
+          audioState.offsetMs = sessionStarted
+            ? Math.max(0, startedAtMs - sessionStarted)
+            : 0;
+
+          state = "recording";
+          render();
+          tick();
+        })
+        .catch(function () {
+          state = "denied";
+          render();
+        });
+    }
+
+    function stopRecording() {
+      if (timerHandle) {
+        window.clearTimeout(timerHandle);
+        timerHandle = null;
+      }
+      if (recorder && recorder.state !== "inactive") {
+        recorder.stop();
+      }
+    }
+
+    render();
+
+    // Phase 3 canonical cleanup: returned function runs when the
+    // pill-action slot's host (the pill) goes hidden (Stop, panel
+    // close, Re-record). Releases the recorder/stream/timer but
+    // PRESERVES audioState.blob — review-media reads it next.
+    return function cleanup() {
+      if (timerHandle) {
+        window.clearTimeout(timerHandle);
+        timerHandle = null;
+      }
+      if (recorder && recorder.state !== "inactive") {
+        try { recorder.stop(); } catch (_) {}
+      }
+      if (mediaStream) {
+        mediaStream.getTracks().forEach(function (t) {
+          t.stop();
+        });
+        mediaStream = null;
+      }
+      if (wrapper && wrapper.parentNode) {
+        wrapper.parentNode.removeChild(wrapper);
+      }
+      // audioState is intentionally NOT cleared here — review-media
+      // (Task 3) reads it next. Cleared on next pill-action mount.
+    };
+  }
 
   // ---- review-media addon (Task 3) ----------------------------------
   // mountReviewMedia(ctx) — placeholder, lands in Task 3.
@@ -85,9 +257,13 @@
       window.PhoenixReplay &&
       typeof window.PhoenixReplay.registerPanelAddon === "function"
     ) {
-      // Three registrations land in Tasks 2-4. Until then the file
-      // compiles and registers nothing — this is intentional during
-      // the migration's intermediate state.
+      window.PhoenixReplay.registerPanelAddon({
+        id: "ash-feedback-audio-mic",
+        slot: "pill-action",
+        paths: ["record_and_report"],
+        mount: mountPillAction,
+      });
+      // review-media + form-top registrations land in Tasks 3-4.
       return true;
     }
     return false;
