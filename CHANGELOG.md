@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### ADR-0001 Audio Narration — Phases 1-4 shipped end-to-end (2026-04-26 wrap)
+
+Audio narration on Feedback submissions is now a complete, documented
+surface. The four phases that shipped 2026-04-24..2026-04-25:
+
+- **Phase 1 (`67fd09a`, 2026-04-24)** — `Feedback` resource macro
+  hooks AshStorage when `config :ash_feedback, audio_enabled: true`
+  AND the `:ash_storage` optional dep is loaded. Default-off; zero
+  surface change for hosts that don't enable it.
+- **Phase 2 (8 sub-phase commits + 7 audio-addon commits, 2026-04-25)** —
+  Recorder JS via `MediaRecorder` (Opus primary, mp4 Safari fallback,
+  permission-denial UX), `AudioUploadsController.prepare/2` minting
+  AshStorage presigned PUT URLs, `:submit` action argument
+  `audio_clip_blob_id`, `AttachBlob` change wiring the attachment.
+- **Phase 3 (`f4082df` + `e5a778f` + `c9fddfa`, 2026-04-25)** — Admin
+  playback synced to rrweb timeline via the `audio_playback/1`
+  function component, the `audio_playback.js` LiveView hook
+  subscribing to phoenix_replay's `PhoenixReplayAdmin.subscribeTimeline`,
+  and `AudioDownloadsController` redirecting to signed GET URLs.
+- **Phase 4 (`40b08d8`, 2026-04-25 + this roll-up, 2026-04-26)** —
+  README audio section reduced to a 17-line pointer; full
+  305-line guide at `docs/guides/audio-narration.md` covering Path
+  A/B framework, setup, recording UX, admin playback, sync rules,
+  and the decisions log.
+
+**End-to-end smoke**: Chrome verified on `/demo/on-demand-float`
+(record → preview → submit → admin playback synced to rrweb cursor).
+Safari smoke deferred to a separate verification pass.
+
+**Companion library**: phoenix_replay ADR-0005 (timeline event bus,
+the JS API admin playback subscribes to) Phases 1+2+3 shipped
+2026-04-24..2026-04-26 — see phoenix_replay's CHANGELOG and the new
+`docs/guides/timeline-event-bus.md` reference.
+
+This closes ADR-0001.
+
 ### Audio addon migrated to Phase 3 pill + review slots (2026-04-25)
 
 Migrated from the legacy single-mount on `slot: "form-top"` to a
