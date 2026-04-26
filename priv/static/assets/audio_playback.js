@@ -4,11 +4,14 @@
 // PhoenixReplayAdmin.subscribeTimeline (ADR-0005) and reconciles the
 // child <audio> element on each event.
 //
-// Sync rules (Phase 3 D3):
-//   play   : audio.play() if timecode_ms >= offset, else noop
+// Single-clip-per-session model: audio shares t=0 with rrweb. There
+// is no offset to seek past.
+//
+// Sync rules:
+//   play   : audio.play()
 //   pause  : audio.pause()
-//   seek   : audio.currentTime = max(0, (timecode_ms - offset) / 1000)
-//            then pause if below offset, else play if last state was :play
+//   seek   : audio.currentTime = timecode_ms / 1000
+//            then play if last state was :play
 //   tick   : correct audio.currentTime when drift > 200ms
 //   ended  : audio.pause()
 //   any    : if detail.speed != lastSpeed, set audio.playbackRate = speed
@@ -22,12 +25,10 @@
   const AudioPlayback = {
     mounted() {
       const sessionId = this.el.dataset.sessionId;
-      const offsetMs = parseInt(this.el.dataset.offsetMs || "0", 10);
       const url = this.el.dataset.url;
 
       this.audio = this.el.querySelector("audio");
       this.audio.src = url;
-      this.offsetMs = offsetMs;
       this.lastSpeed = 1;
       this.lastStateKind = null; // "play" | "pause" | "ended" | null
 
@@ -61,12 +62,12 @@
         this.lastSpeed = speed;
       }
 
-      const targetSec = Math.max(0, (timecode_ms - this.offsetMs) / 1000);
+      const targetSec = Math.max(0, timecode_ms / 1000);
 
       switch (kind) {
         case "play": {
           this.lastStateKind = "play";
-          if (timecode_ms >= this.offsetMs) this.tryPlay();
+          this.tryPlay();
           break;
         }
 
@@ -84,23 +85,13 @@
 
         case "seek": {
           this.audio.currentTime = targetSec;
-          if (timecode_ms < this.offsetMs) {
-            this.audio.pause();
-          } else if (this.lastStateKind === "play") {
+          if (this.lastStateKind === "play") {
             this.tryPlay();
           }
           break;
         }
 
         case "tick": {
-          // Auto-cross the offset boundary on tick: start audio when
-          // the cursor enters the playable window during a play.
-          if (this.lastStateKind === "play" && timecode_ms >= this.offsetMs && this.audio.paused) {
-            this.tryPlay();
-          }
-          if (this.lastStateKind === "play" && timecode_ms < this.offsetMs && !this.audio.paused) {
-            this.audio.pause();
-          }
           // Drift correction.
           const drift = Math.abs(this.audio.currentTime - targetSec) * 1000;
           if (drift > DRIFT_THRESHOLD_MS) this.audio.currentTime = targetSec;

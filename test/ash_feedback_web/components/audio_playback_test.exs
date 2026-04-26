@@ -8,7 +8,6 @@ defmodule AshFeedbackWeb.Components.AudioPlaybackTest do
     html =
       render_component(&AudioPlayback.audio_playback/1, %{
         audio_url: nil,
-        audio_start_offset_ms: 0,
         session_id: "sess-1"
       })
 
@@ -19,24 +18,24 @@ defmodule AshFeedbackWeb.Components.AudioPlaybackTest do
     html =
       render_component(&AudioPlayback.audio_playback/1, %{
         audio_url: "/api/audio/audio_downloads/blob-abc",
-        audio_start_offset_ms: 1234,
         session_id: "sess-xyz"
       })
 
     assert html =~ ~s(phx-hook="AudioPlayback")
     assert html =~ ~s(data-session-id="sess-xyz")
-    assert html =~ ~s(data-offset-ms="1234")
     assert html =~ ~s(data-url="/api/audio/audio_downloads/blob-abc")
     assert html =~ ~s(<audio)
     assert html =~ ~s(controls)
     assert html =~ ~s(preload="metadata")
+
+    # Single-clip-per-session model: no offset attr.
+    refute html =~ ~s(data-offset-ms)
   end
 
   test "uses a stable id derived from session_id" do
     html =
       render_component(&AudioPlayback.audio_playback/1, %{
         audio_url: "/x",
-        audio_start_offset_ms: 0,
         session_id: "sess-stable"
       })
 
