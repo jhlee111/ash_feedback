@@ -215,6 +215,13 @@
   }
 
   // ---- review-media addon -------------------------------------------
+  // Renders the audio preview AND subscribes to phoenix_replay's
+  // timeline bus so the <audio> element follows the mini-player's
+  // play / pause / seek / tick events. Mirrors the admin
+  // audio_playback hook's reconciler — single-clip-per-session means
+  // audio + rrweb share t=0 with no offset.
+  var DRIFT_THRESHOLD_MS = 200;
+
   function mountReviewMedia(ctx) {
     if (!audioState.blob) return function noop() {};
     var wrapper = document.createElement("div");
@@ -234,7 +241,60 @@
 
     ctx.slotEl.appendChild(wrapper);
 
+    // Subscribe to the panel mini-player's timeline. ctx.playerSessionId
+    // is "phx-replay-review" — a stable id phoenix_replay registers
+    // when the mini-player constructs.
+    var lastSpeed = 1;
+    var lastStateKind = null; // "play" | "pause" | "ended" | null
+    var tryPlay = function () {
+      var p = audio.play();
+      if (p && typeof p.catch === "function") p.catch(function () {});
+    };
+    var reconcile = function (detail) {
+      var kind = detail.kind;
+      var targetSec = Math.max(0, (detail.timecode_ms || 0) / 1000);
+      if (typeof detail.speed === "number" && detail.speed !== lastSpeed) {
+        audio.playbackRate = detail.speed;
+        lastSpeed = detail.speed;
+      }
+      switch (kind) {
+        case "play":
+          lastStateKind = "play";
+          tryPlay();
+          break;
+        case "pause":
+          lastStateKind = "pause";
+          audio.pause();
+          break;
+        case "ended":
+          lastStateKind = "ended";
+          audio.pause();
+          break;
+        case "seek":
+          audio.currentTime = targetSec;
+          if (lastStateKind === "play") tryPlay();
+          break;
+        case "tick":
+          var drift = Math.abs(audio.currentTime - targetSec) * 1000;
+          if (drift > DRIFT_THRESHOLD_MS) audio.currentTime = targetSec;
+          break;
+      }
+    };
+
+    var unsubscribe = null;
+    var sessionId = ctx.playerSessionId;
+    var bus = window.PhoenixReplay;
+    if (sessionId && bus && typeof bus.subscribeTimeline === "function") {
+      unsubscribe = bus.subscribeTimeline(sessionId, reconcile, {
+        tick_hz: 10,
+        deliver_initial: false,
+      });
+    }
+
     return function cleanup() {
+      if (typeof unsubscribe === "function") {
+        try { unsubscribe(); } catch (_) {}
+      }
       try { URL.revokeObjectURL(previewUrl); } catch (_) {}
       if (wrapper && wrapper.parentNode) wrapper.parentNode.removeChild(wrapper);
     };
