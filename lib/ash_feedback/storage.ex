@@ -29,6 +29,8 @@ defmodule AshFeedback.Storage do
 
   @behaviour PhoenixReplay.Storage
 
+  import AshFeedback.Helpers, only: [stringify_keys: 1]
+
   alias PhoenixReplay.Storage.Events
 
   @impl true
@@ -189,12 +191,6 @@ defmodule AshFeedback.Storage do
   end
 
   defp coerce_identity(_), do: %{}
-
-  defp stringify_keys(map) when is_map(map) do
-    Map.new(map, fn {k, v} -> {to_string(k), v} end)
-  end
-
-  defp stringify_keys(other), do: other
 
   defp resource! do
     opts!() |> Keyword.fetch!(:resource)

@@ -21,6 +21,8 @@ defmodule AshFeedback.Controller.AudioUploadsController do
 
   use Phoenix.Controller, formats: [:json]
 
+  import AshFeedback.Helpers, only: [stringify_keys: 1]
+
   def prepare(conn, %{"filename" => filename} = params) do
     feedback_resource = AshFeedback.Config.feedback_resource!()
     content_type = Map.get(params, "content_type", "application/octet-stream")
@@ -56,10 +58,4 @@ defmodule AshFeedback.Controller.AudioUploadsController do
   def prepare(conn, _params) do
     conn |> put_status(422) |> json(%{error: "filename is required"})
   end
-
-  defp stringify_keys(map) when is_map(map) do
-    Map.new(map, fn {k, v} -> {to_string(k), v} end)
-  end
-
-  defp stringify_keys(other), do: other
 end
