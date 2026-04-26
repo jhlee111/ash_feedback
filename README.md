@@ -248,10 +248,10 @@ replay view plays the clip in lock-step with the rrweb cursor.
 **Status**: Phases 1 + 2 + 3 shipped (2026-04-25). Recorder + presigned upload +
 admin playback synced to phoenix_replay's timeline event bus (ADR-0005).
 
-**Mode-scoped**: the recorder addon declares `modes: ["on_demand"]` and only
-mounts on `recording: :on_demand` widgets ("Record-and-report mode"). On
-`:continuous` widgets it's silently skipped — voice commentary on
-cached/retrospective replays cannot be synced.
+**Path-scoped**: the recorder addon declares `paths: ["record_and_report"]`
+and only mounts when the host's `allow_paths` includes
+`:record_and_report`. Path A widgets (text-only Report Now flow) silently
+skip the addon — no mic surface appears.
 
 Audio behavior is opt-in at every layer — hosts who skip the config flag get
 the existing description-only feedback flow with zero change.

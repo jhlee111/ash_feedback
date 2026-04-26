@@ -19,7 +19,7 @@ Two distinct feedback report paths exist, only one of which makes audio meaningf
 | **Quick report** | `:continuous` | "Report issue" | **No** — replay timeline predates the voice note by minutes |
 | **Record and report** | `:on_demand` | "Record and report" | **Yes** — both start at the same moment, audio syncs to timeline |
 
-The audio recorder addon enforces this — it declares `modes: ["on_demand"]` at registration time, so the 🎙 button only appears on `:on_demand` widgets. On `:continuous` widgets the addon is silently skipped. Hosts who try to attach audio to a Quick-report flow get the description-only experience automatically.
+The audio recorder addon enforces this — it declares `paths: ["record_and_report"]` at registration time, so the 🎙 button only appears when the user picks Record-and-report from the entry panel. On Quick-report (Path A) the addon is silently skipped. Hosts whose `allow_paths` excludes `:record_and_report` get the description-only experience automatically.
 
 Control style (`:float` vs `:headless`) is independent — both can host either recording mode.
 
