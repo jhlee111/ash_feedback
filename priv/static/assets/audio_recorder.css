@@ -1,52 +1,105 @@
-/* ash_feedback audio addon — Phase 3 styling.
+/* ash_feedback audio addon — pre-flight model styling.
  *
- * Three mount surfaces:
- *   - .phx-replay-audio-pill-action — inside the recording pill
- *     (Task 2). Compact mic toggle.
- *   - .phx-replay-audio-review — inside the REVIEW screen (Task 3).
+ * Two visible mount surfaces (pill-action renders only a passive
+ * indicator via inline styles; form-top renders nothing):
+ *   - .phx-replay-audio-pre-flight — inside the idle-start-options
+ *     slot. Card layout with title + description + iOS-style toggle
+ *     switch (Variant B).
+ *   - .phx-replay-audio-review — inside the REVIEW screen.
  *     Plain <audio controls> with a label.
- *   - form-top is invisible (Task 4 renders nothing).
  */
 
-/* --- pill-action (Phase 3 Task 2) ----------------------------------- */
+/* --- idle-start-options pre-flight toggle ---------------------------- */
 
-.phx-replay-audio-pill-action {
-  display: inline-flex;
+/* Selector chained on [data-slot] to outrank phoenix_replay's
+ * `.phx-replay-modal-panel label { flex-direction: column }` rule,
+ * which targets generic form labels inside the panel. */
+[data-slot="idle-start-options"] .phx-replay-audio-pre-flight {
+  display: flex;
+  flex-direction: row;
   align-items: center;
-  gap: 0.25rem;
-}
-
-.phx-replay-audio-pill-mic,
-.phx-replay-audio-pill-stop-mic {
-  font: inherit;
-  font-size: 0.75rem;
-  padding: 0.25rem 0.5rem;
-  border: 1px solid var(--phx-replay-border, #e2e8f0);
-  border-radius: 9999px;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 0.85rem;
   background: var(--phx-replay-surface, #fff);
-  color: var(--phx-replay-text, #0f172a);
+  border: 1px solid var(--phx-replay-border, #e2e8f0);
+  border-radius: 0.5rem;
   cursor: pointer;
+  font-size: inherit;
+  color: inherit;
 }
 
-.phx-replay-audio-pill-mic:hover,
-.phx-replay-audio-pill-stop-mic:hover {
-  border-color: var(--phx-replay-primary, #4f46e5);
+.phx-replay-audio-pre-flight-text {
+  flex: 1;
+  min-width: 0;
 }
 
-.phx-replay-audio-pill-mic[disabled] {
+.phx-replay-audio-pre-flight-title {
+  font-size: 0.86rem;
+  font-weight: 500;
+  color: var(--phx-replay-text, #0f172a);
+}
+
+.phx-replay-audio-pre-flight-desc {
+  font-size: 0.72rem;
+  color: var(--phx-replay-text-muted, #64748b);
+  margin-top: 0.15rem;
+  line-height: 1.4;
+}
+
+/* Visually-hidden checkbox keeps form semantics + keyboard a11y. */
+.phx-replay-audio-switch-input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+  width: 0;
+  height: 0;
+}
+
+.phx-replay-audio-switch-track {
+  position: relative;
+  width: 2.4rem;
+  height: 1.4rem;
+  border-radius: 9999px;
+  background: #cbd5e1;
+  flex-shrink: 0;
+  transition: background-color 120ms ease;
+}
+
+.phx-replay-audio-switch-thumb {
+  position: absolute;
+  top: 0.15rem;
+  left: 0.15rem;
+  width: 1.1rem;
+  height: 1.1rem;
+  border-radius: 9999px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  transition: transform 120ms ease;
+}
+
+.phx-replay-audio-switch-input:checked ~ .phx-replay-audio-switch-track {
+  background: var(--phx-replay-primary, #4f46e5);
+}
+
+.phx-replay-audio-switch-input:checked ~ .phx-replay-audio-switch-track .phx-replay-audio-switch-thumb {
+  transform: translateX(1rem);
+}
+
+.phx-replay-audio-switch-input:focus-visible ~ .phx-replay-audio-switch-track {
+  outline: 2px solid var(--phx-replay-primary, #4f46e5);
+  outline-offset: 2px;
+}
+
+.phx-replay-audio-switch-input:disabled ~ .phx-replay-audio-switch-track {
   opacity: 0.5;
+}
+
+.phx-replay-audio-pre-flight:has(.phx-replay-audio-switch-input:disabled) {
   cursor: not-allowed;
 }
 
-.phx-replay-audio-pill-stop-mic {
-  /* Recording-state pill mic uses a faint red tint to match the
-   * existing pill dot animation (visual continuity with phoenix_replay's
-   * pill design). */
-  border-color: #ef4444;
-  color: #ef4444;
-}
-
-/* --- review-media (Phase 3 Task 3) ---------------------------------- */
+/* --- review-media -------------------------------------------------- */
 
 .phx-replay-audio-review {
   display: flex;
@@ -66,16 +119,4 @@
 .phx-replay-audio-review-player {
   width: 100%;
   height: 36px;
-}
-
-/* --- shared denial / unsupported states ----------------------------- */
-
-.phx-replay-audio-notice {
-  font-size: 0.75rem;
-  color: var(--phx-replay-text-muted, #64748b);
-}
-
-.phx-replay-audio-warn {
-  color: #c33;
-  font-size: 0.75em;
 }

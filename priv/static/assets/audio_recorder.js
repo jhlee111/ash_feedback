@@ -79,28 +79,46 @@
     var codec = pickCodec();
     audioState.voiceEnabled = readWidgetDefault();
 
+    // Variant B layout — title + descriptor on the left, iOS-style
+    // switch on the right. Real <input type="checkbox"> stays in the
+    // tree (visually-hidden via CSS) so form semantics + keyboard a11y
+    // are preserved; the visible track/thumb is sibling-styled via the
+    // checkbox's :checked state.
     var wrapper = document.createElement("label");
     wrapper.className = "phx-replay-audio-pre-flight";
-    wrapper.style.display = "flex";
-    wrapper.style.alignItems = "center";
-    wrapper.style.gap = "0.55rem";
-    wrapper.style.padding = "0.55rem 0.7rem";
-    wrapper.style.borderRadius = "0.4rem";
-    wrapper.style.border = "1px solid var(--phx-replay-border, #e2e8f0)";
-    wrapper.style.cursor = codec ? "pointer" : "not-allowed";
+
+    var textCol = document.createElement("div");
+    textCol.className = "phx-replay-audio-pre-flight-text";
+
+    var title = document.createElement("div");
+    title.className = "phx-replay-audio-pre-flight-title";
+    title.textContent = "🎙 Voice commentary";
+
+    var desc = document.createElement("div");
+    desc.className = "phx-replay-audio-pre-flight-desc";
+    desc.textContent = codec
+      ? "Narrate what you're doing — synced to the recording timeline."
+      : "Voice not supported in this browser.";
+
+    textCol.appendChild(title);
+    textCol.appendChild(desc);
 
     var checkbox = document.createElement("input");
     checkbox.type = "checkbox";
+    checkbox.className = "phx-replay-audio-switch-input";
     checkbox.checked = audioState.voiceEnabled && !!codec;
     checkbox.disabled = !codec;
-    checkbox.style.margin = "0";
 
-    var label = document.createElement("span");
-    label.textContent = codec ? "🎙 Include voice commentary" : "🎙 Voice not supported in this browser";
-    label.style.fontSize = "0.82rem";
+    var track = document.createElement("span");
+    track.className = "phx-replay-audio-switch-track";
+    track.setAttribute("aria-hidden", "true");
+    var thumb = document.createElement("span");
+    thumb.className = "phx-replay-audio-switch-thumb";
+    track.appendChild(thumb);
 
+    wrapper.appendChild(textCol);
     wrapper.appendChild(checkbox);
-    wrapper.appendChild(label);
+    wrapper.appendChild(track);
     ctx.slotEl.appendChild(wrapper);
 
     checkbox.addEventListener("change", function () {
