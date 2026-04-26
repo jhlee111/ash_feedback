@@ -247,7 +247,48 @@
   }
 
   // ---- review-media addon (Task 3) ----------------------------------
-  // mountReviewMedia(ctx) — placeholder, lands in Task 3.
+  // Renders an <audio controls> preview inside the REVIEW screen so
+  // the user can hear their just-recorded narration before Send.
+  // No-op when audioState.blob is null (Path B without mic toggle).
+  //
+  // Timeline-bus sync with the mini rrweb-player is deferred — this
+  // ships a plain audio control. Companion spec D2 mentions sync as
+  // a future enhancement; user-side timeline bus is out of scope.
+  function mountReviewMedia(ctx) {
+    if (!audioState.blob) {
+      // Nothing to preview. Still return a (no-op) cleanup so the
+      // lifecycle bookkeeping stays consistent.
+      return function noopCleanup() {};
+    }
+
+    var wrapper = document.createElement("div");
+    wrapper.className = "phx-replay-audio-review";
+
+    var label = document.createElement("div");
+    label.className = "phx-replay-audio-review-label";
+    label.textContent = "Voice commentary attached";
+    wrapper.appendChild(label);
+
+    var audio = document.createElement("audio");
+    audio.controls = true;
+    var previewUrl = URL.createObjectURL(audioState.blob);
+    audio.src = previewUrl;
+    audio.className = "phx-replay-audio-review-player";
+    wrapper.appendChild(audio);
+
+    ctx.slotEl.appendChild(wrapper);
+
+    return function cleanup() {
+      // Revoke the URL but PRESERVE audioState.blob — Continue
+      // advances to the describe step which still needs the blob
+      // at Send time. Re-record's discard happens via the next
+      // pill-action mount's clearAudioState call.
+      try { URL.revokeObjectURL(previewUrl); } catch (_) {}
+      if (wrapper && wrapper.parentNode) {
+        wrapper.parentNode.removeChild(wrapper);
+      }
+    };
+  }
 
   // ---- form-top addon (Task 4) --------------------------------------
   // mountFormTop(ctx) — placeholder, lands in Task 4.
@@ -263,7 +304,13 @@
         paths: ["record_and_report"],
         mount: mountPillAction,
       });
-      // review-media + form-top registrations land in Tasks 3-4.
+      window.PhoenixReplay.registerPanelAddon({
+        id: "ash-feedback-audio-preview",
+        slot: "review-media",
+        paths: ["record_and_report"],
+        mount: mountReviewMedia,
+      });
+      // form-top registration lands in Task 4.
       return true;
     }
     return false;
