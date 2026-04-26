@@ -102,7 +102,7 @@ through `mix phoenix_replay.install` and `mix ecto.migrate`. Stop
 before you set the `:storage` config key — this library provides the
 implementation.
 
-### 3. Point `phoenix_replay` at the Ash storage adapter
+### 3. Point `phoenix_replay` at `AshFeedback.Storage`
 
 ```elixir
 # config/config.exs
@@ -111,10 +111,15 @@ config :phoenix_replay,
   storage: {AshFeedback.Storage, resource: MyApp.Feedback.Entry, repo: MyApp.Repo}
 ```
 
-`AshFeedback.Storage` implements the `PhoenixReplay.Storage` behaviour.
-Submissions go through your Ash domain (so policies, paper trail, and
-tenant scoping all apply); rrweb event blobs continue to stream
-through raw Ecto for throughput.
+`AshFeedback.Storage` is a module shipped by this library that
+implements the `PhoenixReplay.Storage` behaviour. Submissions go
+through your Ash domain (so policies, paper trail, and tenant scoping
+all apply); rrweb event blobs continue to stream through raw Ecto for
+throughput.
+
+> Not to be confused with `AshStorage`, a separate library used only
+> by the optional [audio narration](#audio-narration-optional)
+> feature. This step adds nothing beyond what's already in your deps.
 
 ### 4. Create the Ash domain
 
