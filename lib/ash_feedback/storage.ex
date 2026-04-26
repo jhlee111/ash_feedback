@@ -89,10 +89,6 @@ defmodule AshFeedback.Storage do
   # action argument only when the host's resource declared the argument
   # (i.e. compiled with `audio_enabled: true`); audio-disabled hosts get
   # the extra silently dropped rather than an `Ash.Error.Invalid.NoSuchInput`.
-  #
-  # D2-revised: the narration start offset rides on the blob's metadata
-  # map at prepare time, so this forwarder intentionally handles only
-  # the blob id — see the implementation plan's Decisions log for Task 2b.1.
   defp maybe_forward_audio_clip_blob_id(attrs, resource, params) do
     blob_id =
       params

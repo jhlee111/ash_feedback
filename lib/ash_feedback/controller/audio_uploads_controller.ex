@@ -5,11 +5,6 @@ defmodule AshFeedback.Controller.AudioUploadsController do
   the client PUTs (or POSTs) bytes to that URL and submits feedback
   with `extras: { audio_clip_blob_id: <id> }`.
 
-  An optional `metadata` field on the POST body is passed through to
-  AshStorage.Operations.prepare_direct_upload/3 as the blob's
-  metadata. Audio narration uses this to persist
-  `audio_start_offset_ms` on the blob row at upload time.
-
   Mount in your Phoenix router:
 
       post "/audio_uploads/prepare", AshFeedback.Controller.AudioUploadsController, :prepare
@@ -21,21 +16,17 @@ defmodule AshFeedback.Controller.AudioUploadsController do
 
   use Phoenix.Controller, formats: [:json]
 
-  import AshFeedback.Helpers, only: [stringify_keys: 1]
-
   def prepare(conn, %{"filename" => filename} = params) do
     feedback_resource = AshFeedback.Config.feedback_resource!()
     content_type = Map.get(params, "content_type", "application/octet-stream")
     byte_size = Map.get(params, "byte_size", 0)
-    metadata = stringify_keys(Map.get(params, "metadata") || %{})
 
     case AshStorage.Operations.prepare_direct_upload(
            feedback_resource,
            :audio_clip,
            filename: filename,
            content_type: content_type,
-           byte_size: byte_size,
-           metadata: metadata
+           byte_size: byte_size
          ) do
       {:ok, %{blob: blob, url: url, method: method} = info} ->
         json(conn, %{

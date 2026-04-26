@@ -38,21 +38,6 @@ defmodule AshFeedback.Controller.AudioUploadsControllerTest do
     assert is_map(body["fields"])
   end
 
-  test "POST /prepare with metadata persists it on the blob row" do
-    conn =
-      call(%{
-        "filename" => "voice.webm",
-        "content_type" => "audio/webm; codecs=opus",
-        "byte_size" => 12_345,
-        "metadata" => %{"audio_start_offset_ms" => 1234}
-      })
-
-    assert conn.status == 200
-    blob_id = Jason.decode!(conn.resp_body)["blob_id"]
-    blob = Ash.get!(AshFeedback.Test.StorageBlob, blob_id, domain: AshFeedback.Test.StorageDomain)
-    assert blob.metadata["audio_start_offset_ms"] == 1234
-  end
-
   test "POST /prepare returns 422 when filename is missing" do
     conn = call(%{"content_type" => "audio/webm", "byte_size" => 1})
     assert conn.status == 422

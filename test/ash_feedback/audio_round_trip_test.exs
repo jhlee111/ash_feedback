@@ -3,19 +3,14 @@ defmodule AshFeedback.AudioRoundTripTest do
   End-to-end round-trip across the surface ash_feedback actually owns:
 
       AudioUploadsController.prepare/2
-        → AshStorage Blob row (with metadata persisted at prepare time)
+        → AshStorage Blob row
         → AshFeedback.Storage.submit/3 with extras.audio_clip_blob_id
           → AttachBlob change wires the blob to :audio_clip
-            → feedback.audio_clip.blob.metadata["audio_start_offset_ms"]
 
   The HTTP transport between prepare and the bytes-PUT (presigned URL +
   AWS sigv4) is `AshStorage.Service` territory, not ours — `Service.Test`
   stubs that out. A separate Firkin / MinIO smoke is documented in the
   manual smoke checklist for sub-phase 2d.
-
-  D2-revised: the narration start offset is persisted on the **blob**'s
-  metadata map (set by `prepare_direct_upload(..., metadata: ...)`) — not
-  on the attachment. The submit-side wire format only carries the blob id.
   """
   use ExUnit.Case, async: false
 
@@ -48,9 +43,8 @@ defmodule AshFeedback.AudioRoundTripTest do
     :ok
   end
 
-  test "prepare → submit-with-extras → blob attached + offset on blob.metadata" do
-    # 1. Prepare a direct upload through the controller. The browser-side
-    #    recorder JS posts here with `metadata: { audio_start_offset_ms }`.
+  test "prepare → submit-with-extras → blob attached" do
+    # 1. Prepare a direct upload through the controller.
     prepare_conn =
       conn(
         :post,
@@ -58,8 +52,7 @@ defmodule AshFeedback.AudioRoundTripTest do
         Jason.encode!(%{
           "filename" => "voice.webm",
           "content_type" => "audio/webm; codecs=opus",
-          "byte_size" => 12_345,
-          "metadata" => %{"audio_start_offset_ms" => 4321}
+          "byte_size" => 12_345
         })
       )
       |> put_req_header("content-type", "application/json")
@@ -71,9 +64,9 @@ defmodule AshFeedback.AudioRoundTripTest do
     assert prepare_conn.status == 200
     %{"blob_id" => blob_id} = Jason.decode!(prepare_conn.resp_body)
 
-    # 2. Round-trip the blob row to confirm metadata persisted at prepare.
+    # 2. Confirm the blob row exists.
     blob = Ash.get!(StorageBlob, blob_id, domain: StorageDomain)
-    assert blob.metadata["audio_start_offset_ms"] == 4321
+    assert blob.id == blob_id
 
     # 3. Submit feedback through the Storage adapter with extras.audio_clip_blob_id.
     #    The adapter forwards it to the :submit action; AttachBlob wires it.
@@ -89,12 +82,11 @@ defmodule AshFeedback.AudioRoundTripTest do
         %{}
       )
 
-    # 4. Audio attachment links the prepared blob with its metadata.
+    # 4. Audio attachment links the prepared blob.
     feedback = Ash.load!(feedback, [audio_clip: [:blob]], domain: StorageDomain)
 
     assert feedback.audio_clip
     assert feedback.audio_clip.blob_id == blob_id
     assert feedback.audio_clip.blob.id == blob_id
-    assert feedback.audio_clip.blob.metadata["audio_start_offset_ms"] == 4321
   end
 end

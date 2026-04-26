@@ -45,7 +45,7 @@ defmodule AshFeedback.Resources.FeedbackAudioTest do
 
     assert :audio_clip_blob_id in arg_names
 
-    # D2-revised: the offset is on the blob's metadata, not an action arg.
+    # Single-clip-per-session model: no offset argument exists.
     refute :audio_start_offset_ms in arg_names
 
     blob_arg = Enum.find(action.arguments, &(&1.name == :audio_clip_blob_id))
