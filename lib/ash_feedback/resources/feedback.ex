@@ -539,31 +539,7 @@ defmodule AshFeedback.Resources.Feedback do
         action :promote_verified_to_resolved, :map do
           argument :promoted_at, :utc_datetime_usec, allow_nil?: false
 
-          run fn input, context ->
-            candidates =
-              __MODULE__
-              |> Ash.Query.for_read(:read)
-              |> Ash.Query.filter(status: :verified_on_preview)
-              |> Ash.read!(authorize?: false)
-              |> Enum.reject(fn row -> row.reported_on_env == :preview end)
-
-            records =
-              Enum.map(candidates, fn row ->
-                row
-                |> Ash.Changeset.for_update(:resolve, %{},
-                  actor: context.actor,
-                  authorize?: false
-                )
-                |> Ash.update!(authorize?: false)
-              end)
-
-            {:ok,
-             %{
-               resolved_count: length(records),
-               resolved_ids: Enum.map(records, & &1.id),
-               promoted_at: input.arguments.promoted_at
-             }}
-          end
+          run AshFeedback.Actions.PromoteVerifiedToResolved
         end
       end
     end
