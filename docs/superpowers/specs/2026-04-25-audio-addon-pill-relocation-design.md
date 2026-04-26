@@ -36,14 +36,15 @@ the small recorder-side adjustments that follow.
 
 ### D1 — Mic toggle migrates form-top → pill-action
 
-Today's `audio_recorder.js` `register` call uses `slot: "form-top"`. New
-target:
+Today's `audio_recorder.js` `register` call uses `slot: "form-top"` +
+`modes: ["on_demand"]`. ADR-0006 Q-F renames the filter to `paths`
+with user-facing path symbols. New target:
 
 ```js
 window.PhoenixReplay.registerPanelAddon({
   id: "ash-feedback-audio-mic",
   slot: "pill-action",
-  modes: ["on_demand"],
+  paths: [:record_and_report],
   mount: (ctx) => mountMicToggle(ctx),
 });
 ```
@@ -79,7 +80,7 @@ This is registered as a panel addon:
 window.PhoenixReplay.registerPanelAddon({
   id: "ash-feedback-audio-preview",
   slot: "review-media",
-  modes: ["on_demand"],
+  paths: [:record_and_report],
   mount: (ctx) => mountAudioPreview(ctx),
 });
 ```
@@ -121,10 +122,10 @@ same Send moment.
 
 ### D5 — Path A receives no audio surface
 
-ash_feedback's audio addon is `modes: ["on_demand"]` (Path B). On a
-Path A submit (Report now), the addon is never mounted on any slot,
-so no mic UI appears, no audio blob is created, and no audio extras
-are POSTed. This is the desired behavior (Path A's text-only
+ash_feedback's audio addon is `paths: [:record_and_report]` (Path B).
+On a Path A submit (Report now), the addon is never mounted on any
+slot, so no mic UI appears, no audio blob is created, and no audio
+extras are POSTed. This is the desired behavior (Path A's text-only
 constraint per ADR-0006 Q-B).
 
 The `form-top` slot may still be used by **other** ash_feedback
@@ -178,7 +179,8 @@ Single phase, gated on phoenix_replay companion spec Phase 3 landing
 - 1.1 — Recon: read current `audio_recorder.js` register flow + map
   Phase 2 hooks (form-top mount, beforeSubmit, prepare/PUT).
 - 1.2 — Update `register` calls: `pill-action` for mic toggle,
-  `review-media` for preview.
+  `review-media` for preview. Both call sites also rename
+  `modes: ["on_demand"]` → `paths: [:record_and_report]` per ADR-0006.
 - 1.3 — Implement `mountMicToggle(ctx)` — extract from current
   `mountFormTop` and adjust to pill UI conventions (smaller, label
   changes on state).
@@ -243,8 +245,9 @@ Single phase, gated on phoenix_replay companion spec Phase 3 landing
   all unchanged).
 - Migrating other Phase 2 hooks (none exist; audio is the only
   current addon).
-- Renaming the `:on_demand` mode symbol — phoenix_replay ADR-0006 Q-F
-  keeps it.
+(no remaining out-of-scope item from naming — ADR-0006 Q-F removes
+the `:on_demand` symbol from the public surface; this spec adopts the
+new `paths: [:record_and_report]` filter)
 - gs_net host migration — gs_net is a private workplace repo (memory
   `project_gs_net_visibility.md`); the user owns that migration.
 
@@ -257,6 +260,7 @@ Single phase, gated on phoenix_replay companion spec Phase 3 landing
 | Phase 3 (admin playback) | Audio playback subscribes to timeline bus | preserved (admin side); user-side preview reuses pattern |
 | Mode-aware spec D4 | Label "Add voice commentary" | preserved on pill |
 | phoenix_replay ADR-0006 Q-E | New slots `pill-action` + `review-media` | this spec consumes both |
+| phoenix_replay ADR-0006 Q-F | Rename `modes` → `paths`, drop `:on_demand` symbol | both register calls migrate to `paths: [:record_and_report]` |
 
 ## Addendum trigger
 
