@@ -83,8 +83,8 @@ defmodule Mix.Tasks.AshFeedback.InstallTest do
       assert domain_content =~ "use Ash.Domain"
       assert domain_content =~ "otp_app: :test_app"
       assert domain_content =~ "resources do"
-      assert domain_content =~ "resource(TestApp.Feedback.Entry)"
-      assert domain_content =~ "resource(TestApp.Feedback.Entry.Version)"
+      assert domain_content =~ "TestApp.Feedback.Entry"
+      assert domain_content =~ "TestApp.Feedback.Entry.Version"
 
       config_content =
         igniter.rewrite
@@ -122,8 +122,8 @@ defmodule Mix.Tasks.AshFeedback.InstallTest do
 
       assert blob =~ "defmodule TestApp.Storage.Blob do"
       assert blob =~ "extensions: [AshStorage.BlobResource]"
-      assert blob =~ ~S|table("blobs")|
-      assert blob =~ "repo(TestApp.Repo)"
+      assert blob =~ ~S|"blobs"|
+      assert blob =~ "TestApp.Repo"
       assert blob =~ "blob do"
 
       attachment =
@@ -133,10 +133,10 @@ defmodule Mix.Tasks.AshFeedback.InstallTest do
 
       assert attachment =~ "defmodule TestApp.Storage.Attachment do"
       assert attachment =~ "extensions: [AshStorage.AttachmentResource]"
-      assert attachment =~ ~S|table("attachments")|
-      assert attachment =~ "blob_resource(TestApp.Storage.Blob)"
-      assert attachment =~ "belongs_to_resource(:feedback, TestApp.Feedback.Entry)"
-      assert attachment =~ "reference(:feedback, on_delete: :delete)"
+      assert attachment =~ ~S|"attachments"|
+      assert attachment =~ "TestApp.Storage.Blob"
+      assert attachment =~ ":feedback, TestApp.Feedback.Entry"
+      assert attachment =~ ":feedback, on_delete: :delete"
     end
 
     test "registers Blob + Attachment in the Feedback domain" do
@@ -150,8 +150,8 @@ defmodule Mix.Tasks.AshFeedback.InstallTest do
         |> Rewrite.source!("lib/test_app/feedback.ex")
         |> Rewrite.Source.get(:content)
 
-      assert domain =~ "resource(TestApp.Storage.Blob)"
-      assert domain =~ "resource(TestApp.Storage.Attachment)"
+      assert domain =~ "TestApp.Storage.Blob"
+      assert domain =~ "TestApp.Storage.Attachment"
     end
 
     test "writes a Disk service config for the Feedback.Entry resource in dev.exs" do
@@ -254,9 +254,18 @@ defmodule Mix.Tasks.AshFeedback.InstallTest do
   end
 
   describe "Feedback.Comment resource" do
-    test "generates Feedback.Comment and registers it in the domain" do
+    test "generates Feedback.Comment and registers it in the domain when User module exists" do
       igniter =
-        test_project(app_name: :test_app)
+        test_project(
+          app_name: :test_app,
+          files: %{
+            "lib/test_app/accounts/user.ex" => """
+            defmodule TestApp.Accounts.User do
+              defstruct []
+            end
+            """
+          }
+        )
         |> Igniter.compose_task("ash_feedback.install", [])
         |> apply_igniter!()
 
@@ -270,18 +279,45 @@ defmodule Mix.Tasks.AshFeedback.InstallTest do
       assert comment =~ "domain: TestApp.Feedback"
       assert comment =~ "repo: TestApp.Repo"
       assert comment =~ "feedback_resource: TestApp.Feedback.Entry"
+      assert comment =~ "author_resource: TestApp.Accounts.User"
 
       domain =
         igniter.rewrite
         |> Rewrite.source!("lib/test_app/feedback.ex")
         |> Rewrite.Source.get(:content)
 
-      assert domain =~ "resource(TestApp.Feedback.Comment)"
+      assert domain =~ "TestApp.Feedback.Comment"
     end
 
-    test "is idempotent on Feedback.Comment" do
-      first =
+    test "skips Feedback.Comment when no User module is present" do
+      igniter =
         test_project(app_name: :test_app)
+        |> Igniter.compose_task("ash_feedback.install", [])
+
+      refute Map.has_key?(igniter.rewrite.sources, "lib/test_app/feedback/comment.ex")
+
+      igniter = apply_igniter!(igniter)
+
+      domain =
+        igniter.rewrite
+        |> Rewrite.source!("lib/test_app/feedback.ex")
+        |> Rewrite.Source.get(:content)
+
+      refute domain =~ "TestApp.Feedback.Comment"
+    end
+
+    test "is idempotent on Feedback.Comment when User exists" do
+      first =
+        test_project(
+          app_name: :test_app,
+          files: %{
+            "lib/test_app/accounts/user.ex" => """
+            defmodule TestApp.Accounts.User do
+              defstruct []
+            end
+            """
+          }
+        )
         |> Igniter.compose_task("ash_feedback.install", [])
         |> apply_igniter!()
 

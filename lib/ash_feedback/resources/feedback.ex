@@ -420,7 +420,17 @@ defmodule AshFeedback.Resources.Feedback do
         end
 
         update :assign do
-          accept [:assignee_id]
+          # The `:assignee_id` FK exists only when the host provides
+          # `:assignee_resource`. Without it, `:assign` still drives
+          # the state machine but doesn't record who-was-assigned.
+          unquote(
+            if assignee_resource do
+              quote do
+                accept([:assignee_id])
+              end
+            end
+          )
+
           change transition_state(:in_progress)
         end
 
@@ -430,7 +440,21 @@ defmodule AshFeedback.Resources.Feedback do
           # `array_length(pr_urls, 1) >= 1` plus a typed error tuple —
           # tracked as a follow-up if/when this action runs in bulk.
           require_atomic? false
-          accept [:pr_urls, :verified_by_id]
+
+          # Without `:assignee_resource`, `:verified_by_id` doesn't exist
+          # — accept only `:pr_urls` in that case.
+          unquote(
+            if assignee_resource do
+              quote do
+                accept([:pr_urls, :verified_by_id])
+              end
+            else
+              quote do
+                accept([:pr_urls])
+              end
+            end
+          )
+
           argument :note, :string, allow_nil?: true
 
           validate AshFeedback.Validations.RequireAtLeastOnePrUrl
@@ -447,7 +471,15 @@ defmodule AshFeedback.Resources.Feedback do
           # atomic validation fails in that path. Acceptable — promote
           # runs once per deploy.
           require_atomic? false
-          accept [:resolved_by_id]
+
+          unquote(
+            if assignee_resource do
+              quote do
+                accept([:resolved_by_id])
+              end
+            end
+          )
+
           change set_attribute(:resolved_at, &DateTime.utc_now/0)
           change transition_state(:resolved)
         end
