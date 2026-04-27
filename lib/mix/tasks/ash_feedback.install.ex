@@ -50,7 +50,7 @@ if Code.ensure_loaded?(Igniter) do
         group: :ash_feedback,
         example: @example,
         schema: [],
-        composes: ["phoenix_replay.install"]
+        composes: ["phoenix_replay.install", "ash.gen.domain"]
       }
     end
 
@@ -58,15 +58,18 @@ if Code.ensure_loaded?(Igniter) do
     def igniter(igniter) do
       igniter
       |> configure_storage()
+      |> generate_feedback_domain()
+      |> add_resources_to_domain()
       |> Igniter.add_notice("""
 
-      ash_feedback install — Phase 1 complete.
+      ash_feedback install — Phase 2 complete.
 
-      Next step (manual until Phase 2 of 5f lands):
+      Next steps (manual until later phases of 5f land):
 
-        See README "Installation" — steps 4 onward — for the domain
-        module, the concrete Feedback resource, AshStorage Blob +
-        Attachment, and `mix ash.codegen` + `mix ash.migrate`.
+        See README "Installation" — steps 5 onward — for the
+        AshStorage Blob + Attachment + service config, the
+        concrete Feedback resource, and `mix ash.codegen` +
+        `mix ash.migrate`.
       """)
     end
 
@@ -109,6 +112,41 @@ if Code.ensure_loaded?(Igniter) do
       |> Macro.camelize()
       |> List.wrap()
       |> Module.concat()
+    end
+
+    # --- Domain generation patcher ------------------------------------
+
+    # Composes `mix ash.gen.domain` to create `<HostApp>.Feedback` and
+    # add it to `:my_app, ash_domains`. `--ignore-if-exists` keeps the
+    # patcher idempotent on re-runs.
+    defp generate_feedback_domain(igniter) do
+      domain = feedback_domain_module(igniter)
+
+      Igniter.compose_task(igniter, "ash.gen.domain", [
+        inspect(domain),
+        "--ignore-if-exists"
+      ])
+    end
+
+    # --- Domain resource-list patcher ---------------------------------
+
+    # Adds `MyApp.Feedback.Entry` (and its AshPaperTrail-generated
+    # `Version` companion) to the domain's `resources` block.
+    # `Ash.Domain.Igniter.add_resource_reference/3` is idempotent —
+    # it skips if the reference is already there.
+    defp add_resources_to_domain(igniter) do
+      domain = feedback_domain_module(igniter)
+      entry = Module.concat([domain, "Entry"])
+      version = Module.concat([entry, "Version"])
+
+      igniter
+      |> Ash.Domain.Igniter.add_resource_reference(domain, entry)
+      |> Ash.Domain.Igniter.add_resource_reference(domain, version)
+    end
+
+    defp feedback_domain_module(igniter) do
+      app_name = Igniter.Project.Application.app_name(igniter)
+      Module.concat([host_module_alias(app_name), "Feedback"])
     end
   end
 end
