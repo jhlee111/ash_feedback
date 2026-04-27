@@ -31,6 +31,61 @@ Walkthrough source: [`docs/guides/demo-project.md`](docs/guides/demo-project.md)
 
 ## Installation
 
+### Recommended: `mix igniter.install`
+
+```bash
+mix igniter.install phoenix_replay
+mix igniter.install ash_feedback
+```
+
+The two installers run in sequence and AST-patch your codebase to
+the same end state as the manual steps below. After they finish,
+finish bootstrapping with:
+
+```bash
+mix ash.codegen add_feedback_paper_trail
+mix ash.migrate
+```
+
+Then drop the widget in your root layout:
+
+```heex
+<PhoenixReplay.UI.Components.phoenix_replay_widget
+  base_path="/api/feedback"
+  csrf_token={get_csrf_token()}
+  audio_default={:on}
+/>
+```
+
+…and mount the audio routes in `router.ex`:
+
+```elixir
+scope "/api" do
+  pipe_through :api
+  AshFeedback.Router.audio_routes(path: "/audio")
+end
+```
+
+Two unfilled `# TODO:` markers remain — `phoenix_replay`'s
+`:session_token_secret` and `:identify` callback. See
+[`phoenix_replay`'s installer notice](https://github.com/jhlee111/phoenix_replay#installation)
+for details.
+
+#### Optional: scaffold an admin triage UI
+
+```bash
+mix igniter.install ash_feedback --with-admin
+```
+
+Adds `HostAppWeb.Admin.FeedbackLive` — a 140-line plain-HEEx admin
+LiveView with feedback inbox, replay player, audio playback synced
+to the rrweb cursor, and PubSub-driven live refresh. The host owns
+the file from then on; library updates do not flow through. Wire
+your auth pipeline at the `# TODO: on_mount …` line and add the
+`live "/admin/feedback", …` routes the installer's notice prints.
+
+### Manual install (or non-Igniter hosts)
+
 > **All examples use `MyApp` as a placeholder for your app's
 > namespace** (e.g. `FeedbackDemo`, `MyShop`). Replace it consistently
 > across the domain, resource, repo, and config snippets — they must
@@ -612,16 +667,19 @@ Shipped:
 - Phase 5b — `FeedbackComment` + PubSub + PaperTrail
 - Phase 5d — Deploy-pipeline read actions + promote action
 - ADR-0001 — Audio narration (recorder + presigned upload + admin
-  playback synced to rrweb timeline)
+  playback synced to rrweb timeline). Promoted to core feature
+  2026-04-26 (ADR-0001 Q-B addendum).
+- Phase 5f — Igniter installer (`mix igniter.install ash_feedback`)
+  + `--with-admin` admin LiveView generator
+  ([plan](docs/plans/5f-igniter-installer.md))
 
 Open:
 
 - [Phase 5e](docs/plans/5e-integration-adapters.md) — Slack + GitHub
   Issues adapter stubs
-- [Phase 5f](docs/plans/5f-igniter-installer.md) — Igniter installer
-  (`mix ash_feedback.install`)
 - [Phase 5g](docs/plans/5g-admin-live.md) — `AshFeedback.UI.AdminLive`
-  (drop-in admin LiveView)
+  (in-library drop-in admin LiveView; gated on demand for an
+  upgrade-flow path beyond the 5f generator's host-owned file)
 - Phase 6 — Hex publish
 
 ## License
