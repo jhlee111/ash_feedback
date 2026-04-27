@@ -5,8 +5,13 @@ Voice commentary on feedback submissions, end-to-end. The reporter taps 🎙 in 
 **Status**: core feature since 2026-04-26 — `:ash_storage` is a hard dep, no compile-time toggle. ADR-0001 Question B addendum captures the promotion. Cross-browser smoke verified in Chrome; Safari smoke pending.
 
 **Driving ADRs**:
-- [`0001-audio-narration-via-ash-storage.md`](../decisions/0001-audio-narration-via-ash-storage.md) — storage choice + sync-rule design (with the 2026-04-25 Question D addendum)
+- [`0001-audio-narration-via-ash-storage.md`](../decisions/0001-audio-narration-via-ash-storage.md) — storage choice + sync-rule design (with the 2026-04-25 Question D addendum dropping start-offset and the 2026-04-26 Question B addendum promoting AshStorage to core)
 - [phoenix_replay's `0005-replay-player-timeline-event-bus.md`](https://github.com/jhlee111/phoenix_replay/blob/main/docs/decisions/0005-replay-player-timeline-event-bus.md) — the JS API the admin playback subscribes to
+
+> **Already running `mix igniter.install ash_feedback`?** The installer
+> ships steps 1–5 of the **Setup** section — Blob + Attachment
+> resources, the Disk service config in `dev.exs`, and the audio opts on
+> the macro. You can skip to **Recording side (widget)**.
 
 ---
 
@@ -40,12 +45,15 @@ cuts a release.)
 
 ### 2. Define your `Blob` and `Attachment` AshStorage resources
 
-AshStorage is host-owned — you define the resources, not the library. Reference shapes:
+AshStorage is host-owned — you define the resources, not the
+library. `mix igniter.install ash_feedback` scaffolds a minimal
+Postgres-backed pair (`<HostApp>.Storage.Blob` and
+`<HostApp>.Storage.Attachment`) registered in your Feedback domain.
+For richer setups (custom `blob` block, AshOban triggers, alternative
+auth), copy the AshStorage dev resources and adapt:
 
 - [`dev/resources/blob.ex`](https://github.com/ash-project/ash_storage/blob/main/dev/resources/blob.ex) in the AshStorage repo
 - [`dev/resources/attachment.ex`](https://github.com/ash-project/ash_storage/blob/main/dev/resources/attachment.ex)
-
-Both belong in your application's storage domain. Phase 5f's installer will scaffold these eventually; for now copy the dev examples and adapt.
 
 ### 3. Configure the storage service
 
@@ -184,16 +192,15 @@ In your admin feedback detail LiveView template:
 
 <AshFeedbackWeb.Components.AudioPlayback.audio_playback
   audio_url={@audio_url}
-  audio_start_offset_ms={@audio_start_offset_ms}
   session_id={@selected.session_id}
 />
 ```
 
-`audio_url` may be `nil` — the component renders nothing in that case, so wrapping `<:if>` is unnecessary.
+`audio_url` may be `nil` — the component renders nothing in that case, so wrapping `<:if>` is unnecessary. Audio is session-equivalent (recording starts at the rrweb session boundary), so the component takes only the URL — no offset.
 
 > **Note**: pass `session_id` to `<.replay_player>` explicitly. Without it, the player's hook falls back to `el.id` as the timeline-bus scope and the audio component will subscribe under a different sessionId, getting zero ticks.
 
-### 2. Load `:audio_clip` and derive the URL + offset
+### 2. Load `:audio_clip` and derive the URL
 
 ```elixir
 # lib/my_app_web/admin/feedback_live.ex
@@ -202,24 +209,17 @@ defp load_selected(socket, id) do
     MyApp.Feedback.Entry
     |> Ash.get!(id, load: [audio_clip: [:blob]])
 
-  {audio_url, audio_offset_ms} = audio_assigns(feedback)
-
   socket
   |> assign(:selected, feedback)
-  |> assign(:audio_url, audio_url)
-  |> assign(:audio_start_offset_ms, audio_offset_ms)
+  |> assign(:audio_url, audio_url(feedback))
 end
 
-defp audio_assigns(%{audio_clip: %{blob: %{id: blob_id, metadata: metadata}}}) do
-  offset = (metadata || %{}) |> Map.get("audio_start_offset_ms", 0)
+defp audio_url(%{audio_clip: %{blob: %{id: blob_id}}}),
   # Adjust the path prefix to match your `audio_routes/1` mount.
-  {"/audio_uploads/audio_downloads/#{blob_id}", offset}
-end
+  do: "/audio_uploads/audio_downloads/" <> blob_id
 
-defp audio_assigns(_), do: {nil, 0}
+defp audio_url(_), do: nil
 ```
-
-The `audio_start_offset_ms` lives on the **Blob's** `metadata` map (per the revised D2 in ADR-0001), not on the attachment. The recorder writes it during the prepare call.
 
 ### 3. Wire the JS hook into LiveSocket
 
@@ -243,10 +243,10 @@ The hook subscribes to `PhoenixReplayAdmin.subscribeTimeline(sessionId, callback
 
 | Event from `subscribeTimeline` | Action |
 |---|---|
-| `play` | `audio.play()` if `timecode_ms ≥ offset`, else noop (offset crossing during `tick` will start it) |
+| `play` | `audio.play()` |
 | `pause` | `audio.pause()` |
-| `seek` | `audio.currentTime = max(0, (timecode_ms - offset) / 1000)`; pause below offset, resume above if last state was `:play` |
-| `tick` | Drift correction (>200ms); auto-cross offset boundary |
+| `seek` | `audio.currentTime = timecode_ms / 1000` |
+| `tick` | Drift correction (>200ms) |
 | `ended` | `audio.pause()` |
 | **all events** | Track `detail.speed`; write to `audio.playbackRate` whenever it changes (no dedicated `:speed_changed` kind) |
 
@@ -279,14 +279,14 @@ For TTL behavior the Test service ignores `:expires_in` — switch to `Service.D
 | ADR / Spec | Decision | Status |
 |---|---|---|
 | ADR-0001 Q-A | AshStorage as the file store | unchanged |
-| ADR-0001 Q-B | Optional dep, opt-in compile flag | unchanged |
+| ADR-0001 Q-B | AshStorage **core dep** (was optional) | superseded 2026-04-26 — see addendum |
 | ADR-0001 Q-C | Inline pill recorder UX | shipped Phase 2 |
-| ADR-0001 Q-D | Sync rules — addendum 2026-04-25 | revised post-Phase-3 |
+| ADR-0001 Q-D | Sync rules — single-clip-per-session, no offset | superseded 2026-04-26 — offset always 0 |
 | ADR-0001 Q-E | Cascade retention via AshStorage | unchanged |
-| Phase 2 D2 (revised) | Offset on Blob metadata | consumed by Phase 3 admin playback |
 | Phase 3 D1 | `<.audio_playback>` is a dumb function component | shipped |
 | Phase 3 D2 | `GET /audio_downloads/:blob_id` 302 redirect | shipped |
 | Phase 3 D4 | `tick_hz: 10` (was 60) | shipped |
+| Phase 5f | Igniter installer scaffolds Blob/Attachment + service | shipped 2026-04-26 |
 | phoenix_replay 2026-04-25 D2 | Mode-aware panel-addon API | shipped |
 
 ---

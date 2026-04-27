@@ -10,12 +10,20 @@ rows stored as an Ash resource with PaperTrail versioning, and the
 full triage workflow accessible via IEx and a minimal admin
 LiveView.
 
-> **Note**: The drop-in admin LiveView
-> (`AshFeedback.UI.AdminLive`) is [Phase 5g](../plans/5g-admin-live.md)
-> — not yet shipped. This guide includes a minimal inline LV
-> scaffold (~80 lines) as a placeholder. When 5g lands, replace the
-> inline scaffold with a single `live "/admin/feedback",
-> AshFeedback.UI.AdminLive` call.
+> **Quick path**: This guide is the long-form manual walkthrough,
+> useful for understanding what each piece does. If you just want
+> a working setup, run **`mix igniter.install ash_feedback`** (and
+> `--with-admin` for the scaffolded admin LiveView). The installer
+> handles steps 4 onward of this guide. See
+> [README "Recommended"](../../README.md#recommended-mix-igniterinstall)
+> for the short version.
+
+> **Note**: The in-library drop-in admin LiveView
+> (`AshFeedback.UI.AdminLive`, [Phase 5g](../plans/5g-admin-live.md))
+> is gated and not yet shipped. Until then, the
+> `mix ash_feedback.install --with-admin` generator copies an
+> editable LiveView scaffold into your host app — that's what the
+> manual scaffold below mirrors.
 
 ## Prerequisites
 
