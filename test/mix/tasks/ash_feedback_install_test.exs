@@ -290,4 +290,46 @@ defmodule Mix.Tasks.AshFeedback.InstallTest do
       assert_unchanged(second, "lib/test_app/feedback/comment.ex")
     end
   end
+
+  describe "--with-admin admin LiveView generator" do
+    test "without --with-admin, no admin LiveView is generated" do
+      igniter =
+        test_project(app_name: :test_app)
+        |> Igniter.compose_task("ash_feedback.install", [])
+
+      refute Map.has_key?(igniter.rewrite.sources, "lib/test_app_web/admin/feedback_live.ex")
+    end
+
+    test "with --with-admin, generates the templated admin LiveView" do
+      igniter =
+        test_project(app_name: :test_app)
+        |> Igniter.compose_task("ash_feedback.install", ["--with-admin"])
+        |> apply_igniter!()
+
+      live =
+        igniter.rewrite
+        |> Rewrite.source!("lib/test_app_web/admin/feedback_live.ex")
+        |> Rewrite.Source.get(:content)
+
+      assert live =~ "defmodule TestAppWeb.Admin.FeedbackLive do"
+      assert live =~ "use TestAppWeb, :live_view"
+      assert live =~ "alias TestApp.Feedback.Entry"
+      assert live =~ "TestApp.PubSub"
+      assert live =~ "Feedback triage"
+      assert live =~ ~S|TODO: wire your authentication pipeline|
+      assert live =~ "Components.replay_player"
+      assert live =~ "AudioPlayback.audio_playback"
+    end
+
+    test "is idempotent on the admin LiveView module" do
+      first =
+        test_project(app_name: :test_app)
+        |> Igniter.compose_task("ash_feedback.install", ["--with-admin"])
+        |> apply_igniter!()
+
+      second = Igniter.compose_task(first, "ash_feedback.install", ["--with-admin"])
+
+      assert_unchanged(second, "lib/test_app_web/admin/feedback_live.ex")
+    end
+  end
 end
