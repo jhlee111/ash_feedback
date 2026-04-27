@@ -2,14 +2,17 @@
 
 **Status**: Accepted — Question D **superseded** 2026-04-26 by the
 audio pre-flight toggle redesign
-([spec](../superpowers/specs/2026-04-26-audio-pre-flight-toggle-design.md)).
+([spec](../superpowers/specs/2026-04-26-audio-pre-flight-toggle-design.md));
+Question B **superseded** 2026-04-26 by the audio core promotion
+(see [Addendum 2026-04-26 — Question B revised](#addendum-2026-04-26--question-b-revised-ashstorage-promoted-to-core-dep)
+below; execution tracked in [`../plans/audio-core-promotion.md`](../plans/audio-core-promotion.md)).
 Audio is now session-equivalent (recording starts at the rrweb
 session boundary), so offset is always 0. The
 `audio_start_offset_ms` metadata key has been dropped end-to-end:
 JS prepare body, `AudioUploadsController`, `AshFeedback.Storage`,
 and admin playback no longer reference it; AshStorage Blob
 `metadata` JSON no longer carries it for new uploads. Questions A,
-B, C, E remain in force.
+C, E remain in force.
 **Date**: 2026-04-24
 **Depends on**: phoenix_replay ADR-0005 (Replay Player Timeline
 Event Bus)
@@ -252,6 +255,59 @@ Out of scope for this ADR.
   phoenix_replay's `docs/plans/completed/2026-04-23-widget-trigger-ux.md`
   follow-ups list — original "audio belongs in ash_feedback"
   decision.
+
+## Addendum 2026-04-26 — Question B revised: AshStorage promoted to core dep
+
+Original Question B decision: AshStorage as **optional** dep, audio
+gated behind compile-time + runtime flags. Reasoning at the time:
+hosts that don't want audio shouldn't pay the dep cost or feature
+surface.
+
+Revised decision (2026-04-26): **AshStorage is a core dependency.**
+Audio narration is treated as a defining feature of ash_feedback,
+not an opt-in add-on.
+
+Two reasons.
+
+1. **Audio is the load-bearing differentiator** of ash_feedback over
+   "a thin Ash wrapper around phoenix_replay." Voice context on QA
+   reproductions is what makes the artifact qualitatively better
+   than any text-only feedback flow. Burying it behind a feature
+   flag understates what the library is for.
+
+2. **Adopting AshStorage as a hard dep also signals reference
+   adoption** of a new Ash core extension. ash_feedback is positioned
+   as a showcase for Ash community patterns — a thin "if you
+   happen to want this, opt in" relationship works against that.
+
+What changes:
+
+- `mix.exs`: `{:ash_storage, github: ..., branch: "main"}` (drop
+  `optional: true`).
+- `Setup.audio_enabled?/0` removed. The compile-time gate goes away.
+- `Resources.Feedback.__using__/1` always declares
+  `has_one_attached :audio_clip`; `:audio_blob_resource` and
+  `:audio_attachment_resource` opts become **required**.
+- `AshFeedback.Storage.submit/3` no longer needs the silent-drop
+  branch for `audio_clip_blob_id`.
+- `config :ash_feedback, audio_enabled: ...` retired.
+
+What stays in force:
+
+- Hosts still own their `Blob` + `Attachment` resources because the
+  storage backend (S3 / Disk / MinIO) and bucket are host-specific
+  decisions.
+- Audio routes are still mounted via
+  `AshFeedback.Router.audio_routes/1` — routing is host's concern.
+- Question B's original load-bearing reasons (AshStorage's cascade
+  semantics, Ash policies on blobs/attachments) remain unchanged.
+
+Question A's "Why not bespoke S3 plumbing" reasoning carries over
+unchanged — promotion to core only flips the dep contract, not the
+storage choice.
+
+Execution tracked in
+[`../plans/audio-core-promotion.md`](../plans/audio-core-promotion.md).
 
 ## Addendum 2026-04-25 — Question D revised post-implementation
 

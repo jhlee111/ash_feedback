@@ -3,16 +3,26 @@
 **Status**: proposed, **gated**
 **Est**: 8–12 hours (extract + abstract + tests + docs)
 
-## Gate: don't start until the reference host UI is stable
+## Gate: don't start until BOTH preconditions clear
 
-A reference admin LV (~1034 lines) currently lives in the primary
-consuming host application. Extracting to the library **before** its
-UX settles means the library churns in lockstep with every host-side
-tweak.
+1. **Reference host UI is stable** — a reference admin LV
+   (~1034 lines) lives in the primary consuming host. Extracting
+   **before** its UX settles means the library churns in lockstep
+   with every host-side tweak. Need 2–3 weeks of real QA usage with
+   no substantive layout/interaction changes.
 
-**Precondition**: 2–3 weeks of real QA usage on the host's admin UI
-with no substantive layout/interaction changes. Track stability on
-the host side before opening this phase.
+2. **Phase 5f's `--with-admin` generator has shipped, and adopters
+   are asking for a drop-in** — the generator copies the demo's
+   admin into the host repo as a starting point; that addresses
+   the immediate "I just want a working triage UI" need without
+   coupling the library to Cinder/DaisyUI/auth choices. 5g layers a
+   library-managed drop-in *on top* of that, but only makes sense
+   if community demand surfaces for an upgrade path that flows
+   library updates through (instead of host owning the file
+   forever).
+
+Until both signals arrive, host-owned generated files remain the
+forward path for fast adoption.
 
 ## Motivation
 

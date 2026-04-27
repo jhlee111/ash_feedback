@@ -12,9 +12,10 @@ re-filed.
 | # | Phase | Status | File |
 |---|-------|--------|------|
 | —  | Audio addon — pill + review slot relocation | Shipped 2026-04-25 (`dbadabb..5e64137`) — three-mount architecture (pill-action mic, review-media preview, form-top submit). Recording-cycle smoke is manual (mic permission). | [spec](../superpowers/specs/2026-04-25-audio-addon-pill-relocation-design.md) / [plan](../superpowers/plans/2026-04-25-audio-addon-pill-relocation.md) |
+| —  | Audio core promotion | proposed — flips `:ash_storage` from optional to required dep; removes audio compile-time gate. ADR-0001 Question B addendum 2026-04-26. | [audio-core-promotion.md](audio-core-promotion.md) |
 | 5e | Slack + GitHub Issues adapter stubs | proposed | [5e-integration-adapters.md](5e-integration-adapters.md) |
-| 5f | Igniter installer (`mix ash_feedback.install`) | proposed | [5f-igniter-installer.md](5f-igniter-installer.md) |
-| 5g | `AshFeedback.UI.AdminLive` (Cinder drop-in) | proposed, gated | [5g-admin-live.md](5g-admin-live.md) |
+| 5f | Igniter installer + admin generator | proposed — base installer + `--with-admin` flag that scaffolds a host-owned admin LiveView from the demo template. | [5f-igniter-installer.md](5f-igniter-installer.md) |
+| 5g | `AshFeedback.UI.AdminLive` (Cinder drop-in) | proposed, gated — now contingent on 5f's generator landing first + community demand for an in-library variant. | [5g-admin-live.md](5g-admin-live.md) |
 | 6  | Hex publish | deferred | — |
 
 ## Proposals (drafted, not yet committed)
@@ -23,8 +24,9 @@ _None._
 
 **Gated** = do not start until an upstream precondition clears. For
 5g that's "primary host's admin UI stable for 2–3 weeks of real QA
-usage"; extracting before the UX settles churns the library in
-lockstep.
+usage **and** evidence that hosts want a drop-in over the 5f
+generator output"; extracting before either signal arrives churns
+the library in lockstep with the host.
 
 ## Completed phases (historical)
 

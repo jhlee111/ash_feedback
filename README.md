@@ -5,14 +5,9 @@
 > rough edges. See [Roadmap](#roadmap).
 
 An Ash-native bug-report layer for [`phoenix_replay`](https://github.com/jhlee111/phoenix_replay).
-
-`phoenix_replay` captures rrweb sessions from inside your app.
-`ash_feedback` turns each submission into an Ash `Feedback` resource
-with a triage state machine, version-tracked audit trail, PubSub
-notifications, append-only comments, and (optionally) voice narration
-synced to the replay timeline.
-
-You write a 5-line concrete resource. The library produces the rest.
+You write a 5-line concrete resource; the library produces a triage
+state machine, audit trail, PubSub broadcasts, append-only comments,
+and (optionally) voice narration synced to the rrweb replay.
 
 ## Demo
 
@@ -23,92 +18,24 @@ https://github.com/user-attachments/assets/b7f1ab30-60b2-4a2e-8ffb-d186bfa1e20d
 
 Walkthrough source: [`docs/guides/demo-project.md`](docs/guides/demo-project.md).
 
-## Why this exists
-
-If you wire `phoenix_replay` to an Ash app by hand, you end up writing:
-
-- A `Feedback` resource shaped for `phoenix_replay`'s submit payload
-- A state machine for `new → acknowledged → in_progress → verified → resolved` (plus `dismissed`)
-- `AshPaperTrail` so every transition keeps a diff
-- `Ash.Notifier.PubSub` broadcasts so admin LiveViews can react
-- An append-only `FeedbackComment` resource with the right policies
-- Read actions for deploy-pipeline integration (preview blockers,
-  verified-but-not-yet-shipped) and a generic action to bulk-resolve
-  on ship
-- A bridge between `phoenix_replay`'s storage protocol and your Ash
-  domain, so policies + paper trail + tenant scoping all fire on
-  submit instead of slipping past raw Ecto
-
-`ash_feedback` ships all of that. Optionally, it also ships voice
-narration synced to the rrweb cursor.
-
-## What you get
-
-- A `Feedback` resource exposed as a `use` macro — bring your own
-  domain, repo, and (optional) `User` resource
-- `AshStateMachine` triage workflow:
-  ```
-  new ─▶ acknowledged ─▶ in_progress ─▶ verified_on_preview ─▶ resolved
-   │         │               │                    │
-   └─────────┴───────────────┴────────────────────┴─▶ dismissed
-  ```
-- `AshPaperTrail` versions on every transition (optional actor tracking)
-- `Ash.Notifier.PubSub` broadcasts on every lifecycle event ([topics below](#pubsub-topics))
-- Append-only `FeedbackComment` resource — corrections are new comments,
-  never edits
-- `AshFeedback.Storage` — a `PhoenixReplay.Storage` implementation that
-  routes the widget's `/submit` POST through your Ash domain
-- Deploy-pipeline read actions: list preview blockers, list verified
-  rows waiting on a ship, bulk-promote after deploy
-- `AshPrefixedId` compatibility for hosts that use it (no library
-  dependency on it; configurable per host)
-- Optional audio narration that rides through `AshStorage` and plays
-  back in lock-step with `phoenix_replay`'s timeline — gated by a
-  compile-time flag, so bare hosts pay nothing
-
-## What you write vs. what's bundled
-
-**You write** (typically <50 lines of glue):
-
-- One line in `mix.exs` (`{:ash_feedback, ...}`)
-- A short `MyApp.Feedback` Ash `Domain` module
-- A 5-line concrete `Feedback` resource (`use AshFeedback.Resources.Feedback, ...`)
-- (Optional) A 5-line `FeedbackComment` resource
-- One `<PhoenixReplay.UI.Components.phoenix_replay_widget>` tag in
-  your layout — the visible "Report issue" button
-- A `config :phoenix_replay, storage: {AshFeedback.Storage, ...}` line
-- (Audio only) AshStorage `Blob` + `Attachment` resources, an
-  `:audio_enabled` flag, and a router macro call
-
-**The library provides automatically:**
-
-- `AshFeedback.Storage` — bridge between `phoenix_replay`'s submit
-  POST and your Ash domain (so policies + paper trail + tenant
-  scoping all run on ingest)
-- All `Feedback` attributes, state machine transitions, AshPaperTrail
-  wiring, code interface (`submit!`, `acknowledge!`, `verify!`, …),
-  and PubSub topics
-- Append-only `FeedbackComment` with parent-status validation
-- Type modules: `Status`, `Severity`, `Priority`, `DismissReason`,
-  `Environment`
-- (Audio only) presigned upload/download controllers, signed-URL
-  playback component, rrweb-timeline sync
-
-`phoenix_replay` (transitive dep) provides the widget component,
-ingest endpoints, rrweb capture, and admin replay primitives.
-
 ## Requirements
 
 - Elixir 1.17+
 - Ash `~> 3.5`, AshPostgres `~> 2.6`, AshStateMachine `~> 0.2`,
   AshPaperTrail `~> 0.5`
-- [`phoenix_replay`](https://github.com/jhlee111/phoenix_replay)
-  installed and migrated. Its `mix phoenix_replay.install` task creates
+- [`phoenix_replay`](https://github.com/jhlee111/phoenix_replay) —
+  comes transitively. Its `mix phoenix_replay.install` task creates
   the `phoenix_replay_feedbacks` and `phoenix_replay_feedback_comments`
   tables this library binds to.
 - (Optional) `ash_storage` — only when audio narration is enabled
 
 ## Installation
+
+> **All examples use `MyApp` as a placeholder for your app's
+> namespace** (e.g. `FeedbackDemo`, `MyShop`). Replace it consistently
+> across the domain, resource, repo, and config snippets — they must
+> match exactly. A typo here is the most common first-install error
+> (caught at step 8 below).
 
 ### 1. Add the dep
 
@@ -117,8 +44,8 @@ ingest endpoints, rrweb capture, and admin replay primitives.
 def deps do
   [
     {:ash_feedback, github: "jhlee111/ash_feedback", branch: "main"}
-    # phoenix_replay comes transitively from ash_feedback's main branch.
-    # To pin a specific SHA in production, add it explicitly with override:
+    # phoenix_replay comes transitively. To pin a specific SHA in
+    # production, add it explicitly with override:
     #   {:phoenix_replay, github: "jhlee111/phoenix_replay", ref: "<sha>", override: true},
   ]
 end
@@ -126,12 +53,14 @@ end
 
 ### 2. Run `phoenix_replay`'s installer
 
-`phoenix_replay` ships the migrations and config scaffolding for the
-underlying tables. Follow its
-[README](https://github.com/jhlee111/phoenix_replay#installation)
-through `mix phoenix_replay.install` and `mix ecto.migrate`. Stop
-before you set the `:storage` config key — this library provides the
-implementation.
+```bash
+mix deps.get
+mix phoenix_replay.install
+mix ecto.migrate
+```
+
+Stop before you set `phoenix_replay`'s `:storage` config key — this
+library provides the implementation.
 
 ### 3. Point `phoenix_replay` at `AshFeedback.Storage`
 
@@ -142,15 +71,9 @@ config :phoenix_replay,
   storage: {AshFeedback.Storage, resource: MyApp.Feedback.Entry, repo: MyApp.Repo}
 ```
 
-`AshFeedback.Storage` is a module shipped by this library that
-implements the `PhoenixReplay.Storage` behaviour. Submissions go
-through your Ash domain (so policies, paper trail, and tenant scoping
-all apply); rrweb event blobs continue to stream through raw Ecto for
-throughput.
-
-> Not to be confused with `AshStorage`, a separate library used only
-> by the optional [audio narration](#audio-narration-optional)
-> feature. This step adds nothing beyond what's already in your deps.
+> Not to be confused with `AshStorage` — that's a separate library
+> used only by the optional [audio narration](#audio-narration)
+> feature.
 
 ### 4. Create the Ash domain and register it
 
@@ -167,12 +90,10 @@ defmodule MyApp.Feedback do
 end
 ```
 
-Then register the domain in your app config so Ash picks it up:
-
 ```elixir
 # config/config.exs
 config :my_app,
-  ash_domains: [MyApp.Accounts, MyApp.Feedback]   # add MyApp.Feedback to your existing list
+  ash_domains: [MyApp.Accounts, MyApp.Feedback]   # add to your existing list
 ```
 
 ### 5. Create the concrete `Feedback` resource
@@ -183,27 +104,12 @@ defmodule MyApp.Feedback.Entry do
   use AshFeedback.Resources.Feedback,
     domain: MyApp.Feedback,
     repo: MyApp.Repo,
-    assignee_resource: MyApp.Accounts.User,
-    pubsub: MyApp.PubSub
+    assignee_resource: MyApp.Accounts.User,   # omit if you don't have a User resource
+    pubsub: MyApp.PubSub                       # omit to disable broadcasts
 end
 ```
 
-The macro emits a full Ash resource with attributes, the state
-machine, paper trail, code interface, and notifier.
-
-#### `use` options
-
-| Option | Required | Purpose |
-|---|---|---|
-| `:domain` | yes | Your `Ash.Domain` module |
-| `:repo` | yes | Your Ecto repo |
-| `:otp_app` | no | OTP app name; needed by some Ash extensions |
-| `:assignee_resource` | no | Your `User` module. If omitted, the `assignee` / `verified_by` / `resolved_by` relationships are not generated. |
-| `:assignee_attribute_type` | conditional | FK column type. Default `:uuid`. **Required** if your User uses `AshPrefixedId` — see [AshPrefixedId compatibility](#ashprefixedid-compatibility). |
-| `:pubsub` | no | `Phoenix.PubSub` server name. Omit to disable broadcasts. |
-| `:paper_trail_actor` | no | `User` module passed to `AshPaperTrail`'s actor tracking. Adds a `user_id` column to the versions table — re-run `mix ash.codegen` after enabling. |
-| `:audio_blob_resource` | conditional | Required when audio is enabled. Your AshStorage `Blob` resource. |
-| `:audio_attachment_resource` | conditional | Required when audio is enabled. Your AshStorage `Attachment` resource. |
+Full option list: [`use` options](#use-options) under Reference.
 
 ### 6. (Optional) Create the `FeedbackComment` resource
 
@@ -219,26 +125,32 @@ defmodule MyApp.Feedback.Comment do
 end
 ```
 
-Comments are append-only by design. Editing or deleting is
-intentionally not supported — corrections happen by adding a new
-comment.
-
 ### 7. Run codegen + migrate
-
-The base tables (`phoenix_replay_feedbacks`,
-`phoenix_replay_feedback_comments`) are owned by `phoenix_replay`'s
-installer; you don't generate those. But `AshPaperTrail` produces a
-`_versions` table for your concrete resource — emit that:
 
 ```bash
 mix ash.codegen add_feedback_paper_trail
 mix ash.migrate
 ```
 
-### 8. Drop the Report issue widget into a layout
+### 8. Sanity check
 
-The visible "Report issue" button ships with `phoenix_replay`. Place
-its component in your root layout (or any template):
+```bash
+iex -S mix
+```
+
+```elixir
+iex> Ash.Resource.Info.actions(MyApp.Feedback.Entry) |> Enum.map(& &1.name)
+[:read, :submit, :list, :acknowledge, :assign, :verify, :resolve,
+ :dismiss, :list_verified_non_preview, :list_preview_blockers,
+ :promote_verified_to_resolved]
+```
+
+If you get `UndefinedFunctionError` or `:nofile`, the most common
+cause is an un-substituted `MyApp` placeholder. The `defmodule` name
+and the resource referenced from `config :phoenix_replay` (step 3)
+must match exactly.
+
+### 9. Drop the Report issue widget into a layout
 
 ```heex
 <PhoenixReplay.UI.Components.phoenix_replay_widget
@@ -247,26 +159,114 @@ its component in your root layout (or any template):
 />
 ```
 
-`base_path` must match the router prefix where you mounted
-`PhoenixReplay.Router` endpoints during step 2. The full data flow:
+`base_path` must match the router prefix where `PhoenixReplay.Router`
+endpoints are mounted (step 2). For widget configuration (path
+scoping, mic toggle, programmatic API), see
+[`phoenix_replay`'s README](https://github.com/jhlee111/phoenix_replay#installation).
+
+## How it works
+
+After the steps above, here's who is running what.
+
+### `phoenix_replay` provides
+
+The *capture and replay* side of feedback.
+
+**Browser**
+- The Report-issue widget HEEx component (`<.phoenix_replay_widget>`)
+- rrweb capture (DOM mutations, clicks, cursor) and the recorder UI
+- A timeline event bus that lifecycle hooks (e.g. audio playback)
+  subscribe to
+
+**HTTP**
+- Ingest endpoints (`POST /submit`, `POST /events`, `POST /resume`)
+  mounted via `PhoenixReplay.Router` in your app's router
+- The `PhoenixReplay.Storage` behaviour — the contract that
+  `AshFeedback.Storage` implements
+
+**Persistence**
+- `mix phoenix_replay.install` (step 2) creates the base tables:
+  `phoenix_replay_feedbacks`, `phoenix_replay_feedback_comments`,
+  and the rrweb event store
+- Raw-Ecto persistence of rrweb event blobs in object storage
+
+**Replay UI primitives**
+- `PhoenixReplay.UI.Components` — admin player, timeline, scrubber
+- Used by *your* admin LiveView (see [You build](#you-build) below)
+
+### `ash_feedback` provides
+
+The *triage* side — what happens to a feedback row after submit.
+
+**Adapter**
+- `AshFeedback.Storage` — implements `PhoenixReplay.Storage`. Wired
+  in step 3. When phoenix_replay's submit endpoint receives a POST,
+  it calls this adapter, which routes the payload through your Ash
+  domain so policies, paper trail, and tenant scoping all run.
+
+**Generated by step 5's `use AshFeedback.Resources.Feedback`**
+- All `Feedback` attributes (see [Data model](#feedback))
+- State machine (`AshStateMachine`) — `:acknowledge` / `:assign` /
+  `:verify` / `:resolve` / `:dismiss` actions
+- `AshPaperTrail` versions on every transition
+- `Ash.Notifier.PubSub` broadcasts on lifecycle events
+- Code interface — `MyApp.Feedback.submit!`, `acknowledge!`, …
+
+**Generated by step 6's `use AshFeedback.Resources.FeedbackComment`**
+- Append-only comment resource, parent-status validation
+- Code interface — `create_comment!`, `list_by_feedback!`,
+  `get_comment!`
+
+**Static modules**
+- Type modules: `Status`, `Severity`, `Priority`, `DismissReason`,
+  `Environment` (`Ash.Type.Enum` subclasses)
+
+**Optional, when audio narration is enabled**
+- `AudioUploadsController` (presigned upload) +
+  `AudioDownloadsController` (signed download redirect), mounted
+  via `AshFeedback.Router.audio_routes/1`
+- `AshFeedbackWeb.Components.audio_playback` — admin component that
+  auto-syncs to phoenix_replay's timeline event bus
+
+### Submit data flow
 
 ```
 widget → POST {base_path}/submit
-       → phoenix_replay's submit endpoint
-       → AshFeedback.Storage (your :storage config)
-       → MyApp.Feedback.Entry.submit!/1   ← runs policies, paper trail, notifier
+       → phoenix_replay's SubmitController
+       → AshFeedback.Storage.submit/3       ← your :storage config
+       → MyApp.Feedback.Entry.submit!/1     ← runs policies, paper trail, notifier
 ```
 
-For the full widget API (path scoping, audio mic toggle,
-`window.PhoenixReplay.startRecording()`, etc.), see
-[`phoenix_replay`'s README](https://github.com/jhlee111/phoenix_replay#installation).
+### You build
 
-## Data model
+Until Phase 5g ships, the admin UI is yours to compose. A typical
+admin LiveView combines:
 
-### `Feedback`
+- `MyApp.Feedback.Entry.list_feedback!()` — the inbox *(ash_feedback)*
+- `PhoenixReplay.UI.Components.<player>` — the rrweb replay
+  *(phoenix_replay)*
+- Triage actions on your resource — `acknowledge!` / `assign!` /
+  `verify!` / `resolve!` / `dismiss!` *(ash_feedback)*
+- `Phoenix.PubSub.subscribe/2` on the topics emitted by step 5 for
+  live updates *(host glue)*
+- (Audio) `AshFeedbackWeb.Components.audio_playback` rendered next
+  to the player; auto-syncs *(ash_feedback + phoenix_replay)*
+- (Comments) `MyApp.Feedback.Comment.create_comment!` /
+  `list_by_feedback!` *(ash_feedback)*
 
-Generated when you `use AshFeedback.Resources.Feedback`. Stored in
-`phoenix_replay_feedbacks`.
+Phase 5g will ship `AshFeedback.UI.AdminLive` as a drop-in. Until
+then, the demo project's `feedback_live.ex` is the reference scaffold
+(see [`docs/guides/demo-project.md`](docs/guides/demo-project.md)).
+
+## Reference
+
+### Data model
+
+#### `Feedback`
+
+Stored in `phoenix_replay_feedbacks`. Schema is created by
+`phoenix_replay`'s installer; ash_feedback binds to it (`migrate?
+false` on the resource).
 
 | Attribute | Type | Notes |
 |---|---|---|
@@ -295,7 +295,7 @@ Optional `belongs_to` relationships (only generated when
 A self-reference `belongs_to :related_to` is always generated for
 grouping duplicates.
 
-### `FeedbackComment`
+#### `FeedbackComment`
 
 Append-only. Stored in `phoenix_replay_feedback_comments`.
 
@@ -309,10 +309,9 @@ Relationships: `belongs_to :feedback` (required), `belongs_to :author`
 (required).
 
 Constraint: comments cannot be created on feedback whose status is
-`:resolved` or `:dismissed`. Once a feedback closes, the conversation
-is closed.
+`:resolved` or `:dismissed`.
 
-## Code interface
+### Code interface
 
 `use`'ing `AshFeedback.Resources.Feedback` generates these on your
 concrete module:
@@ -358,7 +357,7 @@ MyApp.Feedback.Comment.list_by_feedback!(id)
 MyApp.Feedback.Comment.get_comment!(id)
 ```
 
-## State machine
+### State machine
 
 | Action | From | To |
 |---|---|---|
@@ -370,7 +369,7 @@ MyApp.Feedback.Comment.get_comment!(id)
 
 `:resolved` is terminal. `:dismissed` is terminal.
 
-## PubSub topics
+### PubSub topics
 
 When you pass `:pubsub`, every lifecycle event broadcasts on
 `MyApp.PubSub`. All topics are prefixed with `feedback:`.
@@ -391,35 +390,39 @@ When you pass `:pubsub`, every lifecycle event broadcasts on
 > `status_changed` and `assigned` on `:assign`), the macro emits two
 > `publish` lines. If you layer your own topics, do the same.
 
-## AshPrefixedId compatibility
+### `use` options
 
-AshFeedback **does not depend on** `ash_prefixed_id`. It does support
-hosts that use it.
+For `use AshFeedback.Resources.Feedback`:
 
-If your `User` resource uses `AshPrefixedId`, pass the concrete
-ObjectId type for the FK columns:
+| Option | Required | Purpose |
+|---|---|---|
+| `:domain` | yes | Your `Ash.Domain` module |
+| `:repo` | yes | Your Ecto repo |
+| `:otp_app` | no | OTP app name; needed by some Ash extensions |
+| `:assignee_resource` | no | Your `User` module. If omitted, the `assignee` / `verified_by` / `resolved_by` relationships are not generated. |
+| `:assignee_attribute_type` | no | FK column type for the assignee/verified-by/resolved-by relationships. Default `:uuid`. Override when your `User` resource uses a non-`:uuid` primary-key type. |
+| `:pubsub` | no | `Phoenix.PubSub` server name. Omit to disable broadcasts. |
+| `:paper_trail_actor` | no | `User` module passed to `AshPaperTrail`'s actor tracking. Adds a `user_id` column to the versions table — re-run `mix ash.codegen` after enabling. |
+| `:audio_blob_resource` | conditional | Required when audio is enabled. Your AshStorage `Blob` resource. |
+| `:audio_attachment_resource` | conditional | Required when audio is enabled. Your AshStorage `Attachment` resource. |
 
-```elixir
-use AshFeedback.Resources.Feedback,
-  # ...
-  assignee_resource: MyApp.Accounts.User,
-  assignee_attribute_type: MyApp.Accounts.User.ObjectId
-```
+For `use AshFeedback.Resources.FeedbackComment`: same `:domain`,
+`:repo`, `:pubsub` plus `:feedback_resource`, `:author_resource`, and
+optional `:author_attribute_type` (override when the `User`
+resource's primary key type isn't `:uuid`).
 
-Same on `FeedbackComment` via `:author_attribute_type`.
+> Hosts whose `User` resource uses a non-default primary-key shape
+> (e.g. `AshPrefixedId`) wire the appropriate concrete type via
+> `:assignee_attribute_type` / `:author_attribute_type`. That's a
+> host-app concern; this library doesn't model it. The
+> `AshPaperTrail` config inside the macro ignores the FK columns
+> (`:assignee_id`, `:verified_by_id`, `:resolved_by_id`,
+> `:related_to_id`) so non-UUID FK types don't need to be JSON-safe
+> for diff serialization.
 
-The default `:uuid` short-name resolves to
-`AshPrefixedId.AnyPrefixedId` on prefixed-ID hosts, which round-trips a
-prefixed string into a raw UUID and breaks the `belongs_to` load.
-Passing the concrete type fixes it.
+## Optional features
 
-For the same reason (no JSON-safe `dump_to_embedded` for prefixed
-IDs), `AshPaperTrail` is configured to ignore `:assignee_id`,
-`:verified_by_id`, `:resolved_by_id`, and `:related_to_id`. State
-transitions still capture who-did-what via the action name + status
-diff, so nothing meaningful is lost.
-
-## Audio narration (optional)
+### Audio narration
 
 Voice commentary on bug reports, played back in lock-step with the
 rrweb cursor. The reporter taps the mic in the widget panel, records a
@@ -493,7 +496,7 @@ Full setup — including AshStorage Blob/Attachment skeletons, browser
 support matrix, and the timeline-bus contract — is in
 [`docs/guides/audio-narration.md`](docs/guides/audio-narration.md).
 
-## Deploy-pipeline integration
+### Deploy-pipeline integration
 
 The two `list_*` read actions plus `promote_verified_to_resolved` are
 designed for a CI/CD tool to query before a deploy and bulk-resolve
@@ -519,9 +522,9 @@ typical deployment shape; see the gs_net Phase 5d plan referenced in
 
 ## Gotchas
 
-1. **`AshPrefixedId` hosts must pass the concrete FK type** — see
-   [AshPrefixedId compatibility](#ashprefixedid-compatibility).
-   Default `:uuid` is wrong for those hosts.
+1. **Module-name placeholder typos.** A `MyApp` you forgot to
+   substitute in `defmodule` will pass compile but fail at submit
+   with `module ... is not available`. Step 8 catches this.
 2. **Actor tracking on PaperTrail needs a migration.** Pass
    `paper_trail_actor:` to the macro AND run `mix ash.codegen`
    afterward; it adds a `user_id` column to your versions table.
@@ -569,12 +572,6 @@ Open:
 - [Phase 5g](docs/plans/5g-admin-live.md) — `AshFeedback.UI.AdminLive`
   (drop-in admin LiveView)
 - Phase 6 — Hex publish
-
-Until Phase 5g ships, the admin UI is your responsibility. The library
-exposes the full Ash code interface and PubSub topics; wire them into
-a LiveView in your app. The demo project at
-`~/Dev/ash_feedback_demo` (referenced from the demo guide) is the
-reference scaffold.
 
 ## License
 
