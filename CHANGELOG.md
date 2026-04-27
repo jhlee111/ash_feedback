@@ -7,6 +7,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Audio narration promoted to core (2026-04-26) — BREAKING
+
+ADR-0001 Question B (originally "AshStorage as optional dep") is
+superseded. AshStorage is now a hard dependency and audio is always
+on; the compile-time gate (`config :ash_feedback, audio_enabled:
+true`) and the `Setup.audio_enabled?/0` helper are gone.
+
+**Why**: audio is the load-bearing differentiator of ash_feedback;
+gating it under-states what the library is for. Adopting AshStorage
+unconditionally also signals reference adoption of a new Ash core
+extension. See ADR-0001's "Addendum 2026-04-26 — Question B revised"
+for the full reasoning, and `docs/plans/audio-core-promotion.md` for
+the execution plan.
+
+**Breaking**:
+
+- `mix.exs`: `:ash_storage` is no longer `optional: true`. Hosts that
+  pull in ash_feedback automatically get ash_storage.
+- `use AshFeedback.Resources.Feedback`: `:audio_blob_resource` and
+  `:audio_attachment_resource` are now required opts. Omitting them
+  raises an `ArgumentError` at host compile time with a guided
+  message pointing at the audio guide.
+- `config :ash_feedback, audio_enabled: ...` is retired (no-op if
+  set; remove from your config). The runtime tuning keys
+  (`audio_max_seconds`, `audio_download_url_ttl_seconds`,
+  `audio_attachment_resource`) are unchanged.
+- `AshFeedback.Storage.submit/3` no longer silently drops
+  `audio_clip_blob_id` from `extras` — it is always forwarded to the
+  `:submit` action's argument.
+- `Setup.audio_enabled?/0`, the `audio_enabled?` parameter on
+  `Setup.extensions/1`, `Setup.build_use_opts/4`, and
+  `Setup.validate_audio_opts!/2` are removed. `validate_audio_opts!/1`
+  remains, taking only `opts`.
+
+**Migration for existing hosts** (the demo's case):
+
+1. Drop `audio_enabled: true` from `config :ash_feedback, ...` (the
+   key is no longer read).
+2. Make sure your concrete `Feedback` resource passes
+   `:audio_blob_resource` and `:audio_attachment_resource` — if you
+   were using audio already, no change needed.
+3. Recompile.
+
 ### ADR-0001 Audio Narration — Phases 1-4 shipped end-to-end (2026-04-26 wrap)
 
 Audio narration on Feedback submissions is now a complete, documented

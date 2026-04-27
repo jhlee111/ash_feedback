@@ -47,13 +47,10 @@ defmodule AshFeedback.MixProject do
       {:ash_postgres, "~> 2.6"},
       {:ash_state_machine, "~> 0.2"},
       {:ash_paper_trail, "~> 0.5"},
-      # Optional — gates the audio narration feature (ADR-0001).
-      # Hosts opt in by adding `ash_storage` to their own deps and
-      # setting `config :ash_feedback, audio_enabled: true`. Default
-      # off; the Feedback resource's shape is unchanged when disabled.
-      # Tracks `main` until ash_storage cuts a Hex release; switch to
-      # `~> 0.1` then.
-      {:ash_storage, github: "ash-project/ash_storage", branch: "main", optional: true},
+      # Audio narration (ADR-0001) is a core feature — AshStorage is
+      # required, not optional. Tracks `main` until ash_storage cuts a
+      # Hex release; switch to `~> 0.1` then.
+      {:ash_storage, github: "ash-project/ash_storage", branch: "main"},
       {:phoenix_pubsub, "~> 2.1"},
       {:ecto_sql, "~> 3.10"},
       {:postgrex, ">= 0.0.0"},

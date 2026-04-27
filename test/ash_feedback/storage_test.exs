@@ -4,14 +4,12 @@ defmodule AshFeedback.StorageTest do
   that have audio-narration semantics — currently `submit/3`'s handling
   of the `params["extras"]` payload introduced by sub-phase 2a.
 
-  Audio-enabled host: `AshFeedback.Test.AudioFeedback` (an ETS-backed
-  fixture that mirrors the macro's audio-enabled emission). The Storage
-  adapter must read `extras["audio_clip_blob_id"]` and forward it as the
-  `:audio_clip_blob_id` argument so `AshStorage.Changes.AttachBlob`
-  attaches the blob.
-
-  Audio-disabled host: `AshFeedback.Test.TestFeedback`. The adapter must
-  silently drop audio extras rather than raise `NoSuchInput`.
+  Both fixtures are audio-enabled — audio is core (ADR-0001 Question B
+  addendum 2026-04-26), so every host concrete resource accepts
+  `:audio_clip_blob_id`. `AshFeedback.Test.TestFeedback` is the
+  macro-generated fixture; `AshFeedback.Test.AudioFeedback` is
+  hand-rolled with `AshStorage.Service.Test` so the test can drive
+  blob attachment end-to-end.
   """
   use AshFeedback.Test.DataCase, async: false
 
@@ -21,7 +19,7 @@ defmodule AshFeedback.StorageTest do
   alias AshFeedback.Test.StorageDomain
   alias AshFeedback.Test.TestFeedback
 
-  describe "submit/3 — audio-disabled host (TestFeedback)" do
+  describe "submit/3 — base regressions (TestFeedback)" do
     setup do
       Application.put_env(
         :phoenix_replay,
@@ -34,24 +32,12 @@ defmodule AshFeedback.StorageTest do
       :ok
     end
 
-    test "creates a feedback row from minimal params (regression)" do
+    test "creates a feedback row from minimal params" do
       assert {:ok, fb} =
                Storage.submit("session-base", %{"description" => "hi"}, %{})
 
       assert fb.session_id == "session-base"
       assert fb.description == "hi"
-    end
-
-    test "extras.audio_clip_blob_id is silently dropped when :submit lacks the argument" do
-      blob_id = Ecto.UUID.generate()
-
-      params = %{
-        "description" => "no audio here",
-        "extras" => %{"audio_clip_blob_id" => blob_id}
-      }
-
-      assert {:ok, fb} = Storage.submit("session-drop-audio", params, %{})
-      assert fb.description == "no audio here"
     end
 
     test "extras with unrelated keys is a no-op" do
@@ -65,7 +51,7 @@ defmodule AshFeedback.StorageTest do
     end
   end
 
-  describe "submit/3 — audio-enabled host (AudioFeedback)" do
+  describe "submit/3 — audio attachment (AudioFeedback)" do
     setup do
       AshStorage.Service.Test.start()
       AshStorage.Service.Test.reset!()
@@ -97,7 +83,7 @@ defmodule AshFeedback.StorageTest do
       assert fb.audio_clip.blob_id == blob.id
     end
 
-    test "submit without extras still works (audio is optional)" do
+    test "submit without extras leaves audio_clip nil" do
       params = %{"description" => "no audio attached"}
 
       assert {:ok, fb} = Storage.submit("session-audio-host-no-clip", params, %{})

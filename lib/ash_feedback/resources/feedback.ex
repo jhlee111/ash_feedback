@@ -55,25 +55,23 @@ defmodule AshFeedback.Resources.Feedback do
     repo = Keyword.fetch!(opts, :repo)
     otp_app = Keyword.get(opts, :otp_app)
     assignee_resource = Keyword.get(opts, :assignee_resource)
-    # Host's User primary-key Ash type. Defaults to `:uuid` short-name
-    # so bare-Ash hosts still work. Hosts using AshPrefixedId MUST pass
-    # the concrete ObjectId type (e.g. `GsNet.Accounts.User.ObjectId`)
-    # otherwise the :assignee belongs_to filter cannot round-trip the
-    # prefixed string at load time.
+    # Host's User primary-key Ash type. Defaults to `:uuid` short-name.
+    # Hosts whose User uses a non-default primary-key shape (e.g.
+    # AshPrefixedId) override this with the concrete type so the
+    # `:assignee` belongs_to filter round-trips at load time.
     assignee_attribute_type = Keyword.get(opts, :assignee_attribute_type, :uuid)
     pubsub_module = Keyword.get(opts, :pubsub)
     paper_trail_actor = Keyword.get(opts, :paper_trail_actor)
     _ = Keyword.get(opts, :prefix, "fbk")
-    # ADR-0001: AshStorage blob + attachment resources for audio narration.
-    # Both required when audio is compile-time enabled; Setup.validate_audio_opts!
+    # ADR-0001 Question B addendum 2026-04-26: audio is core. Both
+    # AshStorage resources are required; Setup.validate_audio_opts!
     # raises with a guided ArgumentError if either is missing.
     audio_blob_resource = Keyword.get(opts, :audio_blob_resource)
     audio_attachment_resource = Keyword.get(opts, :audio_attachment_resource)
 
-    audio_enabled? = Setup.audio_enabled?()
-    Setup.validate_audio_opts!(opts, audio_enabled?)
+    Setup.validate_audio_opts!(opts)
 
-    use_opts = Setup.build_use_opts(domain, audio_enabled?, pubsub_module, otp_app)
+    use_opts = Setup.build_use_opts(domain, pubsub_module, otp_app)
 
     quote location: :keep do
       use Ash.Resource, unquote(use_opts)
@@ -93,11 +91,11 @@ defmodule AshFeedback.Resources.Feedback do
         store_action_name? true
 
         # FK attributes are ignored: AshPaperTrail serializes diffs as
-        # JSONB, and host-provided AshPrefixedId types (e.g.
-        # GsNet.Accounts.User.ObjectId) don't have a JSON-safe
-        # dump_to_embedded path. State transitions already capture the
-        # "who-did-what" via :status + the changes blob without the
-        # FK column, so we lose nothing meaningful by ignoring them.
+        # JSONB, and non-default primary-key types provided by the host
+        # may not have a JSON-safe `dump_to_embedded` path. State
+        # transitions already capture the "who-did-what" via `:status`
+        # + the changes blob without the FK column, so we lose nothing
+        # meaningful by ignoring them.
         ignore_attributes [
           :inserted_at,
           :updated_at,
@@ -175,11 +173,9 @@ defmodule AshFeedback.Resources.Feedback do
         end
       end
 
-      # ADR-0001 Phase 1 — audio narration attachment via AshStorage.
-      # Only emitted when both the runtime opt-in
-      # (`config :ash_feedback, audio_enabled: true`) and the optional
-      # `:ash_storage` dep are present at compile time. `dependent:
-      # :purge` on the entity makes the attachment + blob (and the
+      # ADR-0001 — audio narration attachment via AshStorage. Core
+      # since 2026-04-26 (Question B addendum); always emitted.
+      # `dependent: :purge` makes the attachment + blob (and the
       # underlying S3 object) follow the parent feedback row's
       # lifecycle, matching ADR-0001 Question E.
       #
@@ -188,18 +184,12 @@ defmodule AshFeedback.Resources.Feedback do
       # across all attachments declared on the resource). The host
       # provides both via the `:audio_blob_resource` and
       # `:audio_attachment_resource` opts.
-      unquote(
-        if audio_enabled? do
-          quote do
-            storage do
-              blob_resource unquote(audio_blob_resource)
-              attachment_resource unquote(audio_attachment_resource)
+      storage do
+        blob_resource unquote(audio_blob_resource)
+        attachment_resource unquote(audio_attachment_resource)
 
-              has_one_attached :audio_clip, dependent: :purge
-            end
-          end
-        end
-      )
+        has_one_attached :audio_clip, dependent: :purge
+      end
 
       code_interface do
         define :submit, action: :submit
@@ -358,24 +348,18 @@ defmodule AshFeedback.Resources.Feedback do
           upsert? true
           upsert_identity :unique_session_id
 
-          # ADR-0001 / D2-revised: when audio is compile-time enabled, the
-          # action accepts an optional blob id (minted by the prepare-upload
-          # controller in `AshFeedback.Controller.AudioUploadsController`)
-          # and `AshStorage.Changes.AttachBlob` wires it to the
-          # `:audio_clip` `has_one_attached`. The narration start offset
-          # rides on the blob's metadata map (set at prepare-time) so it
-          # is intentionally NOT an action argument — see the plan's
+          # ADR-0001 / D2-revised: the action accepts an optional blob id
+          # (minted by the prepare-upload controller in
+          # `AshFeedback.Controller.AudioUploadsController`) and
+          # `AshStorage.Changes.AttachBlob` wires it to the `:audio_clip`
+          # `has_one_attached`. The narration start offset rides on the
+          # blob's metadata map (set at prepare-time) so it is
+          # intentionally NOT an action argument — see the plan's
           # Decisions log entry for Task 2b.1.
-          unquote(
-            if audio_enabled? do
-              quote do
-                argument :audio_clip_blob_id, :uuid, allow_nil?: true
+          argument :audio_clip_blob_id, :uuid, allow_nil?: true
 
-                change {AshStorage.Changes.AttachBlob,
-                        argument: :audio_clip_blob_id, attachment: :audio_clip}
-              end
-            end
-          )
+          change {AshStorage.Changes.AttachBlob,
+                  argument: :audio_clip_blob_id, attachment: :audio_clip}
 
           change AshFeedback.Changes.CoerceReportedOnEnv
         end

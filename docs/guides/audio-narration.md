@@ -2,7 +2,7 @@
 
 Voice commentary on feedback submissions, end-to-end. The reporter taps 🎙 in the widget panel, records a short clip, and submits; the audio file rides through [AshStorage](https://github.com/ash-project/ash_storage) (presigned upload to S3, MinIO, Disk, or any compatible backend) and links to the feedback row. The admin replay view plays the clip in lock-step with the rrweb cursor.
 
-**Status**: Phases 1 + 2 + 3 shipped (2026-04-25). Cross-browser smoke verified in Chrome; Safari smoke pending.
+**Status**: core feature since 2026-04-26 — `:ash_storage` is a hard dep, no compile-time toggle. ADR-0001 Question B addendum captures the promotion. Cross-browser smoke verified in Chrome; Safari smoke pending.
 
 **Driving ADRs**:
 - [`0001-audio-narration-via-ash-storage.md`](../decisions/0001-audio-narration-via-ash-storage.md) — storage choice + sync-rule design (with the 2026-04-25 Question D addendum)
@@ -29,19 +29,14 @@ See [phoenix_replay's mode-aware panel-addons spec](https://github.com/jhlee111/
 
 ## Setup
 
-### 1. Add `ash_storage` to deps
+### 1. Confirm `ash_storage` is in your dep tree
 
-```elixir
-# mix.exs
-def deps do
-  [
-    {:ash_storage, github: "ash-project/ash_storage"}
-    # ... existing ash_feedback + phoenix_replay deps
-  ]
-end
-```
+`ash_feedback` lists `ash_storage` as a hard dependency, so it comes
+transitively when you add `:ash_feedback` to `mix.exs`. No extra
+deps line is needed.
 
-(Pre-Hex; switch to `~> 0.1` once it cuts a release.)
+(Pre-Hex; tracks `ash-project/ash_storage`'s `main` branch until it
+cuts a release.)
 
 ### 2. Define your `Blob` and `Attachment` AshStorage resources
 
@@ -78,12 +73,11 @@ config :my_app, MyApp.Feedback.Entry,
   ]
 ```
 
-### 4. Enable audio in `ash_feedback`
+### 4. Configure `ash_feedback` runtime keys
 
 ```elixir
 # config/config.exs
 config :ash_feedback,
-  audio_enabled: true,
   feedback_resource: MyApp.Feedback.Entry,
   audio_attachment_resource: MyApp.Storage.Attachment,
   audio_max_seconds: 300,                # default
@@ -103,7 +97,7 @@ defmodule MyApp.Feedback.Entry do
 end
 ```
 
-`otp_app:` is required when audio is enabled so AshStorage's per-resource service config resolves at runtime. Audio-disabled hosts can leave it off.
+`otp_app:` is required so AshStorage's per-resource service config resolves at runtime. Both `:audio_blob_resource` and `:audio_attachment_resource` are required — the macro raises a guided `ArgumentError` if either is missing.
 
 ### 6. Codegen + migrate
 

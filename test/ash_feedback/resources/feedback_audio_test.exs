@@ -2,23 +2,19 @@ defmodule AshFeedback.Resources.FeedbackAudioTest do
   @moduledoc """
   Verifies that `AshFeedback.Resources.Feedback`'s `__using__/1` macro
   emits the audio narration wiring (storage section + `:submit` action's
-  `:audio_clip_blob_id` argument + `AshStorage.Changes.AttachBlob` change)
-  when the host's `audio_enabled` flag is on at compile time.
+  `:audio_clip_blob_id` argument + `AshStorage.Changes.AttachBlob`
+  change) for every host concrete resource.
 
-  The macro reads `Application.get_env/3` inside `__using__/1`, so
-  flipping the flag at test time and recompiling a throwaway fixture via
-  `Code.compile_string/2` exercises the audio-enabled branch without
-  forcing the rest of the suite to run with audio on.
+  Audio narration is core (ADR-0001 Question B addendum 2026-04-26):
+  the macro never gates the audio block; hosts must always provide
+  `:audio_blob_resource` and `:audio_attachment_resource` opts.
   """
   use ExUnit.Case, async: false
 
-  @fixture_module AshFeedback.Resources.FeedbackAudioTest.AudioEnabledFixture
+  @fixture_module AshFeedback.Resources.FeedbackAudioTest.Fixture
 
   setup do
-    Application.put_env(:ash_feedback, :audio_enabled, true)
-
     on_exit(fn ->
-      Application.delete_env(:ash_feedback, :audio_enabled)
       :code.purge(@fixture_module)
       :code.delete(@fixture_module)
     end)
@@ -26,7 +22,7 @@ defmodule AshFeedback.Resources.FeedbackAudioTest do
     :ok
   end
 
-  test "compiles with audio enabled and emits the full audio wiring" do
+  test "compiles and emits the full audio wiring" do
     Code.compile_string("""
     defmodule #{inspect(@fixture_module)} do
       @moduledoc false
@@ -73,7 +69,7 @@ defmodule AshFeedback.Resources.FeedbackAudioTest do
     assert audio_clip.dependent == :purge
   end
 
-  test "raises a helpful error when audio is enabled without resources" do
+  test "raises a helpful error when audio resources are missing" do
     assert_raise ArgumentError, ~r/:audio_blob_resource/, fn ->
       Code.compile_string("""
       defmodule AshFeedback.Resources.FeedbackAudioTest.MissingResources do

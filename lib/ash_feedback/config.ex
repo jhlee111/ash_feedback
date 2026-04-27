@@ -4,7 +4,6 @@ defmodule AshFeedback.Config do
   `config/config.exs`:
 
       config :ash_feedback,
-        audio_enabled: true,
         feedback_resource: MyApp.Feedback.Entry,
         audio_attachment_resource: MyApp.Storage.Attachment
 

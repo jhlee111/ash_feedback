@@ -44,10 +44,11 @@ end
 
 defmodule AshFeedback.Test.AudioFeedback do
   @moduledoc """
-  Audio-enabled feedback fixture. Mirrors the shape that
-  `AshFeedback.Resources.Feedback`'s `__using__/1` macro would emit when
-  `audio_enabled` is true at compile time, hand-rolled to keep the test
-  fixture independent of the macro's runtime-config gymnastics.
+  Audio feedback fixture. Mirrors the shape that
+  `AshFeedback.Resources.Feedback`'s `__using__/1` macro emits — audio
+  is core (ADR-0001 Question B addendum), so every host concrete
+  resource has this shape. Hand-rolled here to keep the test fixture
+  independent of the macro's setup helpers.
 
   Used by `AshFeedback.StorageTest` to verify that `submit/3` forwards
   `params["extras"]["audio_clip_blob_id"]` to the action's

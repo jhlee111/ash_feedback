@@ -1,9 +1,9 @@
 defmodule AshFeedback.Resources.Feedback.Setup do
   @moduledoc false
   # Macro-time helpers for `AshFeedback.Resources.Feedback.__using__/1`.
-  # Lifts argument resolution, audio-feature detection, and the ~20-line
-  # ArgumentError message out of the quote block so the macro body reads
-  # as a short list of declarative sections.
+  # Lifts argument resolution and the multi-line ArgumentError message
+  # out of the quote block so the macro body reads as a short list of
+  # declarative sections.
   #
   # Each function here runs at the host's compile time (when the host
   # invokes `use AshFeedback.Resources.Feedback, ...`); none of it
@@ -11,50 +11,34 @@ defmodule AshFeedback.Resources.Feedback.Setup do
   # place where Ash DSL is emitted.
 
   @doc """
-  Returns `true` when ADR-0001 audio narration is enabled and the
-  optional `AshStorage` dep is loadable. Both conditions must hold —
-  the runtime opt-in alone is meaningless without the extension.
+  Raises a fully-formed `ArgumentError` if the host did not pass both
+  `:audio_blob_resource` and `:audio_attachment_resource`. Audio
+  narration is core (ADR-0001 Question B addendum 2026-04-26): every
+  host must provide an AshStorage `Blob` + `Attachment` pair.
 
-  Uses `Application.get_env/3` rather than `compile_env/3` because
-  `compile_env` cannot be called inside a `defmacro` body. The value is
-  still resolved at the host's compile time.
+  AshStorage's section-level DSL requires both — failing here surfaces
+  the misconfiguration at compile time rather than as a confusing DSL
+  error from inside Spark.
   """
-  def audio_enabled? do
-    Application.get_env(:ash_feedback, :audio_enabled, false) and
-      Code.ensure_loaded?(AshStorage)
-  end
-
-  @doc """
-  Raises a fully-formed `ArgumentError` if audio is enabled but the
-  host did not provide both `:audio_blob_resource` and
-  `:audio_attachment_resource`. AshStorage's section-level DSL requires
-  both — failing here surfaces the misconfiguration at compile time
-  rather than a confusing DSL error from inside Spark.
-  """
-  def validate_audio_opts!(opts, audio_enabled?) do
+  def validate_audio_opts!(opts) do
     blob = Keyword.get(opts, :audio_blob_resource)
     attachment = Keyword.get(opts, :audio_attachment_resource)
 
-    if audio_enabled? and (is_nil(blob) or is_nil(attachment)) do
+    if is_nil(blob) or is_nil(attachment) do
       raise ArgumentError, """
-      AshFeedback audio narration is enabled (config :ash_feedback,
-      audio_enabled: true) but `:audio_blob_resource` and/or
-      `:audio_attachment_resource` were not passed to
-      `use AshFeedback.Resources.Feedback`.
+      AshFeedback requires audio narration storage resources but
+      `:audio_blob_resource` and/or `:audio_attachment_resource` were
+      not passed to `use AshFeedback.Resources.Feedback`.
 
-      Define an AshStorage BlobResource + AttachmentResource pair in
-      your host (see `AshStorage` docs and the reference shapes under
-      `dev/resources/{blob,attachment}.ex` in the ash_storage repo)
-      and pass both:
+      Define an AshStorage `BlobResource` + `AttachmentResource` pair
+      in your host (see the audio-narration guide and the AshStorage
+      docs) and pass both:
 
           use AshFeedback.Resources.Feedback,
             domain: MyApp.Feedback,
             repo: MyApp.Repo,
             audio_blob_resource: MyApp.Storage.Blob,
             audio_attachment_resource: MyApp.Storage.Attachment
-
-      Or set `config :ash_feedback, audio_enabled: false` to disable
-      audio narration.
       """
     end
 
@@ -70,12 +54,10 @@ defmodule AshFeedback.Resources.Feedback.Setup do
 
   @doc """
   Returns the `extensions:` list passed to `use Ash.Resource`.
-  AshStorage is appended only when audio narration is compile-time
-  enabled.
+  AshStorage is always present — audio narration is core.
   """
-  def extensions(audio_enabled?) do
-    base = [AshStateMachine, AshPaperTrail.Resource]
-    if audio_enabled?, do: base ++ [AshStorage], else: base
+  def extensions do
+    [AshStateMachine, AshPaperTrail.Resource, AshStorage]
   end
 
   @doc """
@@ -83,11 +65,11 @@ defmodule AshFeedback.Resources.Feedback.Setup do
   `:otp_app` only when the host provided one (AshStorage's per-resource
   service config relies on it).
   """
-  def build_use_opts(domain, audio_enabled?, pubsub_module, otp_app) do
+  def build_use_opts(domain, pubsub_module, otp_app) do
     base = [
       domain: domain,
       data_layer: AshPostgres.DataLayer,
-      extensions: extensions(audio_enabled?),
+      extensions: extensions(),
       notifiers: notifiers(pubsub_module)
     ]
 
