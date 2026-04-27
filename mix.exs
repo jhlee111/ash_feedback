@@ -17,7 +17,8 @@ defmodule AshFeedback.MixProject do
       description:
         "Ash-native storage adapter and resource for PhoenixReplay. " <>
           "Gives Ash apps idiomatic feedback ingestion with policies, " <>
-          "paper trail, and prefixed IDs.",
+          "paper trail, append-only comments, and voice narration " <>
+          "synced to the rrweb replay.",
       package: package(),
 
       # Docs
@@ -54,6 +55,10 @@ defmodule AshFeedback.MixProject do
       {:phoenix_pubsub, "~> 2.1"},
       {:ecto_sql, "~> 3.10"},
       {:postgrex, ">= 0.0.0"},
+      # Igniter powers `mix ash_feedback.install` (Phase 5f). Optional —
+      # hosts that don't run the installer don't need it. Tracks the
+      # same minor as phoenix_replay's installer.
+      {:igniter, "~> 0.7", optional: true},
       {:ex_doc, "~> 0.34", only: :dev, runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false}
     ]
