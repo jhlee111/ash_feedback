@@ -66,6 +66,37 @@ narration synced to the rrweb cursor.
   back in lock-step with `phoenix_replay`'s timeline — gated by a
   compile-time flag, so bare hosts pay nothing
 
+## What you write vs. what's bundled
+
+**You write** (typically <50 lines of glue):
+
+- One line in `mix.exs` (`{:ash_feedback, ...}`)
+- A short `MyApp.Feedback` Ash `Domain` module
+- A 5-line concrete `Feedback` resource (`use AshFeedback.Resources.Feedback, ...`)
+- (Optional) A 5-line `FeedbackComment` resource
+- One `<PhoenixReplay.UI.Components.phoenix_replay_widget>` tag in
+  your layout — the visible "Report issue" button
+- A `config :phoenix_replay, storage: {AshFeedback.Storage, ...}` line
+- (Audio only) AshStorage `Blob` + `Attachment` resources, an
+  `:audio_enabled` flag, and a router macro call
+
+**The library provides automatically:**
+
+- `AshFeedback.Storage` — bridge between `phoenix_replay`'s submit
+  POST and your Ash domain (so policies + paper trail + tenant
+  scoping all run on ingest)
+- All `Feedback` attributes, state machine transitions, AshPaperTrail
+  wiring, code interface (`submit!`, `acknowledge!`, `verify!`, …),
+  and PubSub topics
+- Append-only `FeedbackComment` with parent-status validation
+- Type modules: `Status`, `Severity`, `Priority`, `DismissReason`,
+  `Environment`
+- (Audio only) presigned upload/download controllers, signed-URL
+  playback component, rrweb-timeline sync
+
+`phoenix_replay` (transitive dep) provides the widget component,
+ingest endpoints, rrweb capture, and admin replay primitives.
+
 ## Requirements
 
 - Elixir 1.17+
@@ -121,7 +152,7 @@ throughput.
 > by the optional [audio narration](#audio-narration-optional)
 > feature. This step adds nothing beyond what's already in your deps.
 
-### 4. Create the Ash domain
+### 4. Create the Ash domain and register it
 
 ```elixir
 # lib/my_app/feedback.ex
@@ -134,6 +165,14 @@ defmodule MyApp.Feedback do
     resource MyApp.Feedback.Comment        # optional — skip if you don't need comments
   end
 end
+```
+
+Then register the domain in your app config so Ash picks it up:
+
+```elixir
+# config/config.exs
+config :my_app,
+  ash_domains: [MyApp.Accounts, MyApp.Feedback]   # add MyApp.Feedback to your existing list
 ```
 
 ### 5. Create the concrete `Feedback` resource
@@ -195,6 +234,32 @@ installer; you don't generate those. But `AshPaperTrail` produces a
 mix ash.codegen add_feedback_paper_trail
 mix ash.migrate
 ```
+
+### 8. Drop the Report issue widget into a layout
+
+The visible "Report issue" button ships with `phoenix_replay`. Place
+its component in your root layout (or any template):
+
+```heex
+<PhoenixReplay.UI.Components.phoenix_replay_widget
+  base_path="/api/feedback"
+  csrf_token={get_csrf_token()}
+/>
+```
+
+`base_path` must match the router prefix where you mounted
+`PhoenixReplay.Router` endpoints during step 2. The full data flow:
+
+```
+widget → POST {base_path}/submit
+       → phoenix_replay's submit endpoint
+       → AshFeedback.Storage (your :storage config)
+       → MyApp.Feedback.Entry.submit!/1   ← runs policies, paper trail, notifier
+```
+
+For the full widget API (path scoping, audio mic toggle,
+`window.PhoenixReplay.startRecording()`, etc.), see
+[`phoenix_replay`'s README](https://github.com/jhlee111/phoenix_replay#installation).
 
 ## Data model
 
