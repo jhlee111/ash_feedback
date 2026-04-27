@@ -107,4 +107,82 @@ defmodule Mix.Tasks.AshFeedback.InstallTest do
       assert_unchanged(second, "config/config.exs")
     end
   end
+
+  describe "audio storage resources" do
+    test "generates Blob and Attachment modules with the expected shape" do
+      igniter =
+        test_project(app_name: :test_app)
+        |> Igniter.compose_task("ash_feedback.install", [])
+        |> apply_igniter!()
+
+      blob =
+        igniter.rewrite
+        |> Rewrite.source!("lib/test_app/storage/blob.ex")
+        |> Rewrite.Source.get(:content)
+
+      assert blob =~ "defmodule TestApp.Storage.Blob do"
+      assert blob =~ "extensions: [AshStorage.BlobResource]"
+      assert blob =~ ~S|table("blobs")|
+      assert blob =~ "repo(TestApp.Repo)"
+      assert blob =~ "blob do"
+
+      attachment =
+        igniter.rewrite
+        |> Rewrite.source!("lib/test_app/storage/attachment.ex")
+        |> Rewrite.Source.get(:content)
+
+      assert attachment =~ "defmodule TestApp.Storage.Attachment do"
+      assert attachment =~ "extensions: [AshStorage.AttachmentResource]"
+      assert attachment =~ ~S|table("attachments")|
+      assert attachment =~ "blob_resource(TestApp.Storage.Blob)"
+      assert attachment =~ "belongs_to_resource(:feedback, TestApp.Feedback.Entry)"
+      assert attachment =~ "reference(:feedback, on_delete: :delete)"
+    end
+
+    test "registers Blob + Attachment in the Feedback domain" do
+      igniter =
+        test_project(app_name: :test_app)
+        |> Igniter.compose_task("ash_feedback.install", [])
+        |> apply_igniter!()
+
+      domain =
+        igniter.rewrite
+        |> Rewrite.source!("lib/test_app/feedback.ex")
+        |> Rewrite.Source.get(:content)
+
+      assert domain =~ "resource(TestApp.Storage.Blob)"
+      assert domain =~ "resource(TestApp.Storage.Attachment)"
+    end
+
+    test "writes a Disk service config for the Feedback.Entry resource in dev.exs" do
+      igniter =
+        test_project(app_name: :test_app)
+        |> Igniter.compose_task("ash_feedback.install", [])
+        |> apply_igniter!()
+
+      dev =
+        igniter.rewrite
+        |> Rewrite.source!("config/dev.exs")
+        |> Rewrite.Source.get(:content)
+
+      assert dev =~ "config :test_app, TestApp.Feedback.Entry"
+      assert dev =~ "AshStorage.Service.Disk"
+      assert dev =~ "Path.join("
+      assert dev =~ ~s("tmp/uploads")
+      assert dev =~ "direct_upload: true"
+    end
+
+    test "is idempotent — re-running leaves Blob, Attachment, and dev.exs alone" do
+      first =
+        test_project(app_name: :test_app)
+        |> Igniter.compose_task("ash_feedback.install", [])
+        |> apply_igniter!()
+
+      second = Igniter.compose_task(first, "ash_feedback.install", [])
+
+      assert_unchanged(second, "lib/test_app/storage/blob.ex")
+      assert_unchanged(second, "lib/test_app/storage/attachment.ex")
+      assert_unchanged(second, "config/dev.exs")
+    end
+  end
 end
